@@ -1,13 +1,15 @@
 package com.mvg.virtualfs.storage
 
+import kotlinx.serialization.Serializable
 import java.util.*
 
-enum class NodeType(type: Byte){
+enum class NodeType(val type: Byte){
     None(0),
     Folder(1),
     File(2)
 }
 
+@Serializable
 data class INode(
         val id: Int,
         val type: NodeType,

@@ -40,7 +40,7 @@ fun FormatViFileSystem(filePath: Path, settings: ViFileSystemSettings) {
     }
     }
 
-    val templateBlock = BlockGroup(blocksPerGroup, inodesPerGroup,0, blockSize, null, 0)
+    val templateBlock = BlockGroup(blockSize, blocksPerGroup, inodesPerGroup, 0, 0)
     // TODO calculate and add last block group for remainder blocks
 }
 
