@@ -16,6 +16,9 @@ class PlainToDiskEncoder(private val outputChannel: WritableByteChannel, bufferS
 
     override val serializersModule: SerializersModule = EmptySerializersModule
 
+    override fun encodeNull() {}
+    override fun encodeNotNullMark() {}
+
     //override fun encodeBoolean(value: Boolean)
     //override fun encodeShort(value: Short)
     //override fun encodeFloat(value: Float) = output.writeFloat(value)

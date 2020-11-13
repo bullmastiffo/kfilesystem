@@ -1,5 +1,6 @@
 plugins {
     id("vifs.lib")
+    kotlin("plugin.serialization") version "1.4.10"
 }
 
 dependencies {

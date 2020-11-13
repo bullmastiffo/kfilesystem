@@ -13,7 +13,9 @@ enum class NodeType(val type: Byte){
 data class INode(
         val id: Int,
         val type: NodeType,
+        @Serializable(with = DateAsLongSerializer::class)
         val created: Date?,
+        @Serializable(with = DateAsLongSerializer::class)
         var lastModified: Date?) {
     val blockOffsets: LongArray = LongArray(OFFSETS_SIZE)
 
