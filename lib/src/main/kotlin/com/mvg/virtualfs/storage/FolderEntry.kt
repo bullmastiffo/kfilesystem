@@ -1,8 +1,9 @@
 package com.mvg.virtualfs.storage
 
-import kotlinx.serialization.Serializable
+import com.mvg.virtualfs.storage.serialization.OutputChannelSerializable
 
-@Serializable
+
+@OutputChannelSerializable(with = FolderEntrySerializer::class)
 data class FolderEntry(
         val inodeId: Int,
         val nodeType: NodeType,

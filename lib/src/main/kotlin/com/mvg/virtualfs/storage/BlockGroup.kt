@@ -1,9 +1,8 @@
 package com.mvg.virtualfs.storage
 
-import kotlinx.serialization.Serializable
-import java.util.*
+import com.mvg.virtualfs.storage.serialization.OutputChannelSerializable
 
-@Serializable(with = BlockGroupSerializer::class)
+@OutputChannelSerializable(with = BlockGroupSerializer::class)
 class BlockGroup (
         val blockSize: Int,
         val numberOfBlocks: Int,
@@ -11,8 +10,8 @@ class BlockGroup (
         var freeBlocksCount: Int,
         var freeInodesCount: Int,
         var dataBlocksOffset: Long,
-        val blockBitMap: BitSet,
-        val inodesBitMap: BitSet,
+        val blockBitMap: FixedBitMap,
+        val inodesBitMap: FixedBitMap,
         val inodes: Array<INode>) {
 
     constructor(_blockSize: Int,
@@ -23,21 +22,16 @@ class BlockGroup (
      : this(_blockSize, _numberOfBlocks, _numberOfInodes,
             _numberOfBlocks, _numberOfInodes,
             currentBlockOffset + sizeInBlocks(_blockSize, _numberOfBlocks, _numberOfInodes) * _blockSize,
-            BitSet(_numberOfBlocks), BitSet(_numberOfInodes),
+            FixedBitMap(_numberOfBlocks), FixedBitMap(_numberOfInodes),
             Array<INode>(_numberOfInodes) {
                 i -> INode(firstInodeIndex + i, NodeType.None, null, null)
             })
     {
     }
-    init {
-        blockBitMap[numberOfBlocks-1] = false
-        inodesBitMap[numberOfInodes-1] = false
-    }
 
     companion object{
         fun sizeInBytes(numberOfBlocks: Int, numberOfInodes: Int): Int{
-            // all fields plus extra 2 Int.SIZE_BYTES because of collection serialization
-            return (5 * Int.SIZE_BYTES + Long.SIZE_BYTES + 2 * Int.SIZE_BYTES
+            return (5 * Int.SIZE_BYTES + Long.SIZE_BYTES
                     + ceilDivide(numberOfBlocks, Byte.SIZE_BITS)
                     + ceilDivide(numberOfInodes, Byte.SIZE_BITS)
                     + numberOfInodes * INode.sizeInBytes())

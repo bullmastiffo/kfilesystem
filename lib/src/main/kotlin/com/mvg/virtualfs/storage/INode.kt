@@ -1,6 +1,6 @@
 package com.mvg.virtualfs.storage
 
-import kotlinx.serialization.Serializable
+import com.mvg.virtualfs.storage.serialization.OutputChannelSerializable
 import java.util.*
 
 enum class NodeType(val type: Byte){
@@ -9,13 +9,11 @@ enum class NodeType(val type: Byte){
     File(2)
 }
 
-@Serializable
+@OutputChannelSerializable(with = INodeSerializer::class)
 data class INode(
         val id: Int,
         val type: NodeType,
-        @Serializable(with = DateAsLongSerializer::class)
         val created: Date?,
-        @Serializable(with = DateAsLongSerializer::class)
         var lastModified: Date?) {
     val blockOffsets: LongArray = LongArray(OFFSETS_SIZE)
 

@@ -1,9 +1,10 @@
 package com.mvg.virtualfs
 
 import com.mvg.virtualfs.storage.BlockGroup
-import com.mvg.virtualfs.storage.PlainToDiskEncoder
 import com.mvg.virtualfs.storage.*
 import com.mvg.virtualfs.storage.SuperGroup
+import com.mvg.virtualfs.storage.serialization.SeekableChannel
+import com.mvg.virtualfs.storage.serialization.serializeToChannel
 import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
@@ -33,19 +34,19 @@ fun FormatViFileSystem(filePath: Path, settings: ViFileSystemSettings) {
     val dataBlocksPerGroup = blocksPerGroup - BlockGroup.sizeInBlocks(blockSize, blocksPerGroup, inodesPerGroup)
 
     Files.newByteChannel(filePath, StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE).use {
+        val seekableChannel = SeekableChannel(it)
         var offset = FIRST_BLOCK_OFFSET;
         val superBlock = SuperGroup(
             totalBlocks.toInt(), totalNodes,
 dataBlocksPerGroup * totalBlockGroups.toInt(),
             totalNodes,
             blocksPerGroup, inodesPerGroup)
-        val encoder = PlainToDiskEncoder(it, null)
-        encoder.encodeInstance(superBlock)
+        serializeToChannel(seekableChannel, superBlock)
         var inodesIndex = 0
         for(blockNumber in 0 until totalBlockGroups) {
             it.position(offset)
             var block = BlockGroup(blockSize, dataBlocksPerGroup, inodesPerGroup, offset, inodesIndex)
-            encoder.encodeInstance(block)
+            serializeToChannel(seekableChannel, block)
             offset+= blockGroupSize
             inodesIndex+=inodesPerGroup
         }

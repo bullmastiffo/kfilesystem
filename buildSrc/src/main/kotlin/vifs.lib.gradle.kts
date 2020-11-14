@@ -3,5 +3,5 @@ plugins {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.1")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.10")
 }

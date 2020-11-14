@@ -1,7 +1,7 @@
 package com.mvg.virtualfs.storage
-import kotlinx.serialization.*
+import com.mvg.virtualfs.storage.serialization.*
 
-@Serializable
+@OutputChannelSerializable(with = SuperGroupSerializer::class)
 data class SuperGroup(
         val totalBlocks: Int,
         val totalInodes: Int,
