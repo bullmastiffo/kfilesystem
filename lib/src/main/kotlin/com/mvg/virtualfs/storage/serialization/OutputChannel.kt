@@ -1,9 +1,10 @@
 package com.mvg.virtualfs.storage.serialization
 
+import java.io.Closeable
 import java.nio.ByteBuffer
 import java.util.*
 
-interface OutputChannel {
+interface OutputChannel : Closeable {
     fun writeByteBuffer(value: ByteBuffer)
     fun writeString(value: String)
     fun writeLong(value: Long)

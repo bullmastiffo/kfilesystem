@@ -2,13 +2,9 @@ package com.mvg.virtualfs.storage
 
 import java.nio.ByteBuffer
 
-class FixedBitMap(val size: Int) {
-    private val byteArray: ByteArray
+class FixedBitMap(private val byteArray: ByteArray) {
 
-    init {
-        val byteSize = ceilDivide(size, Byte.SIZE_BITS)
-        byteArray = ByteArray(byteSize)
-    }
+    constructor(size: Int) : this(ByteArray(ceilDivide(size, Byte.SIZE_BITS))){}
 
     fun getBit(n: Int): Boolean
     {
@@ -36,13 +32,17 @@ class FixedBitMap(val size: Int) {
 
     private fun checkAndGetIndexes(n: Int): Pair<Int, Int>
     {
-        if(n >= size){
+        val byteIndex = ceilDivide(n, Byte.SIZE_BITS)
+        if(byteIndex >= byteArray.size){
             throw IndexOutOfBoundsException()
         }
-        val byteIndex = ceilDivide(n, Byte.SIZE_BITS)
         val bitIndex = n % Byte.SIZE_BITS
         return Pair(byteIndex, bitIndex)
     }
 
-    fun toByteBuffer(): ByteBuffer = ByteBuffer.wrap(byteArray)
+    internal fun toByteBuffer(): ByteBuffer = ByteBuffer.wrap(byteArray)
+
+    companion object{
+        fun getBytesSize(size: Int) = ceilDivide(size, Byte.SIZE_BITS)
+    }
 }

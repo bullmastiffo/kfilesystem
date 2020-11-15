@@ -1,21 +1,22 @@
 package com.mvg.virtualfs.storage
 
+import com.mvg.virtualfs.core.NodeType
 import com.mvg.virtualfs.storage.serialization.OutputChannelSerializable
 import java.util.*
 
-enum class NodeType(val type: Byte){
-    None(0),
-    Folder(1),
-    File(2)
-}
-
 @OutputChannelSerializable(with = INodeSerializer::class)
-data class INode(
+class INode(
         val id: Int,
-        val type: NodeType,
-        val created: Date?,
-        var lastModified: Date?) {
-    val blockOffsets: LongArray = LongArray(OFFSETS_SIZE)
+        var type: NodeType,
+        var created: Date?,
+        var lastModified: Date?,
+        val blockOffsets: LongArray) {
+
+    constructor(_id: Int,
+                _type: NodeType,
+                _created: Date?,
+                _lastModified: Date?) : this(_id, _type, _created, _lastModified, LongArray(OFFSETS_SIZE))
+    {}
 
     companion object
     {

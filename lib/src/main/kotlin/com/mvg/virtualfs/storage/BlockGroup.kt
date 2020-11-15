@@ -1,5 +1,6 @@
 package com.mvg.virtualfs.storage
 
+import com.mvg.virtualfs.core.NodeType
 import com.mvg.virtualfs.storage.serialization.OutputChannelSerializable
 
 @OutputChannelSerializable(with = BlockGroupSerializer::class)

@@ -1,18 +1,16 @@
 package com.mvg.virtualfs;
 
-import java.io.InputStream
-import java.io.OutputStream
+import java.io.Closeable
 import java.nio.channels.SeekableByteChannel
 
 enum class FileOpenMode {
     Read, Write
 }
 
-interface FileSystem {
-    fun createFile(name: String): OutputStream
+interface FileSystem : Closeable {
+    fun createFile(name: String): SeekableByteChannel
     fun openFile(name: String, mode: FileOpenMode): SeekableByteChannel
-    fun readFile(name: String): InputStream
     fun deleteFile(name: String)
-    fun getFiles(path: String?): Iterable<FileInfo>
+    fun getFiles(path: String): Iterable<FileInfo>
 }
 

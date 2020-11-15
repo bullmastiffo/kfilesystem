@@ -3,7 +3,6 @@ package com.mvg.app
 import com.mvg.virtualfs.*
 import java.nio.file.FileSystems
 import java.nio.file.Files
-import java.nio.file.Path
 
 fun main(args: Array<String>) {
     val fileName = "D:\\temp\\vi.fs"
@@ -14,6 +13,6 @@ fun main(args: Array<String>) {
         Files.delete(virtualFsPath)
     }
     var settins = ViFileSystemSettings(100L * (1L shl 20), BlockSize.Block1Kb)
-    FormatViFileSystem(virtualFsPath, settins)
+    formatViFileSystem(virtualFsPath, settins)
     println("Hello World!")
 }

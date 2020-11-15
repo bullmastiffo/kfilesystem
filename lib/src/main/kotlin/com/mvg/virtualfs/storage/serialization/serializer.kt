@@ -16,6 +16,15 @@ fun <T> serializeToChannel(channel: OutputChannel, value: T){
     serializer.serialize(channel, value)
 }
 
+inline fun <reified T> deserializeFromChannel(channel: InputChannel) : T {
+    return deserializeFromChannel<T>(channel, T::class)
+}
+
+fun <T> deserializeFromChannel(channel: InputChannel, typeClass: KClass<*>) : T {
+    val serializer = map.getOrPut(typeClass, {  initialize<T>(typeClass) }) as OutputChannelSerializer<T>
+    return serializer.deserialize(channel)
+}
+
 private fun <T> initialize(typeClass: KClass<*>) : OutputChannelSerializer<T>
 {
     val serializerAttribute = typeClass.annotations.find { it is OutputChannelSerializable } as? OutputChannelSerializable

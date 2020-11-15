@@ -3,7 +3,7 @@ package com.mvg.virtualfs
 import com.mvg.virtualfs.storage.BlockGroup
 import com.mvg.virtualfs.storage.*
 import com.mvg.virtualfs.storage.SuperGroup
-import com.mvg.virtualfs.storage.serialization.SeekableChannel
+import com.mvg.virtualfs.storage.serialization.NioDuplexChannel
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
 import java.nio.ByteBuffer
 import java.nio.file.Files
@@ -11,11 +11,11 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 
 private const val SIZE_4KB = 0x1000
-fun FormatViFileSystem(filePath: Path, settings: ViFileSystemSettings) {
+fun formatViFileSystem(filePath: Path, settings: ViFileSystemSettings) {
     val blockSize = settings.blockSize?.size ?: SIZE_4KB
     val blocksPerGroup = 8 * blockSize
     val blockGroupSize = blocksPerGroup * blockSize
-    val totalBlockGroups = settings.size / blockGroupSize
+    val totalBlockGroups = (settings.size / blockGroupSize).toInt()
     val totalBlocks = settings.size / blockSize
     val denominator = if (blockSize >= SIZE_4KB) {
         1
@@ -30,30 +30,35 @@ fun FormatViFileSystem(filePath: Path, settings: ViFileSystemSettings) {
     if (totalBlockGroups < 1)
         throw IllegalArgumentException("size must be at least more than 8 * blockSize * blockSize")
 
-    val inodesPerGroup = (totalNodes / totalBlockGroups).toInt()
+    val inodesPerGroup = totalNodes / totalBlockGroups
     val dataBlocksPerGroup = blocksPerGroup - BlockGroup.sizeInBlocks(blockSize, blocksPerGroup, inodesPerGroup)
 
     Files.newByteChannel(filePath, StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE).use {
-        val seekableChannel = SeekableChannel(it)
+        val duplexChannel = NioDuplexChannel(it)
         var offset = FIRST_BLOCK_OFFSET;
-        val superBlock = SuperGroup(
-            totalBlocks.toInt(), totalNodes,
-dataBlocksPerGroup * totalBlockGroups.toInt(),
-            totalNodes,
-            blocksPerGroup, inodesPerGroup)
-        serializeToChannel(seekableChannel, superBlock)
+
         var inodesIndex = 0
         for(blockNumber in 0 until totalBlockGroups) {
-            it.position(offset)
+            duplexChannel.position(offset)
             var block = BlockGroup(blockSize, dataBlocksPerGroup, inodesPerGroup, offset, inodesIndex)
-            serializeToChannel(seekableChannel, block)
+            serializeToChannel(duplexChannel, block)
             offset+= blockGroupSize
             inodesIndex+=inodesPerGroup
         }
-
         // allocate full size on stream
-        it.write(ByteBuffer.wrap(ByteArray(1)))
+        duplexChannel.position(offset-1)
+        duplexChannel.writeByte(0)
 
+        val superBlock = SuperGroup(
+                blockSize,
+                totalBlocks.toInt(), totalNodes,
+                totalBlockGroups,
+                dataBlocksPerGroup * totalBlockGroups,
+                totalNodes,
+                blocksPerGroup, inodesPerGroup)
+        duplexChannel.position(0)
+        serializeToChannel(duplexChannel, superBlock)
+        duplexChannel.close()
         //TODO init filesystem, create root folder
     }
 }
