@@ -1,11 +1,14 @@
 package com.mvg.virtualfs.storage.serialization
 
+import java.nio.channels.ReadableByteChannel
+import java.nio.channels.SeekableByteChannel
+import java.nio.channels.WritableByteChannel
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.*
 import kotlin.reflect.full.*
 
 private val map: ConcurrentHashMap<KClass<*>, OutputChannelSerializer<*>> = ConcurrentHashMap<KClass<*>, OutputChannelSerializer<*>>()
-fun <T> serializeToChannel(channel: OutputChannel, value: T){
+fun <T> serializeToChannel(channel: WritableByteChannel, value: T){
     if (value == null)
     {
         throw IllegalArgumentException("value must not be null")
@@ -16,11 +19,11 @@ fun <T> serializeToChannel(channel: OutputChannel, value: T){
     serializer.serialize(channel, value)
 }
 
-inline fun <reified T> deserializeFromChannel(channel: InputChannel) : T {
+inline fun <reified T> deserializeFromChannel(channel: ReadableByteChannel) : T {
     return deserializeFromChannel<T>(channel, T::class)
 }
 
-fun <T> deserializeFromChannel(channel: InputChannel, typeClass: KClass<*>) : T {
+fun <T> deserializeFromChannel(channel: ReadableByteChannel, typeClass: KClass<*>) : T {
     val serializer = map.getOrPut(typeClass, {  initialize<T>(typeClass) }) as OutputChannelSerializer<T>
     return serializer.deserialize(channel)
 }

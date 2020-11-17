@@ -1,8 +1,8 @@
 package com.mvg.virtualfs.core
 
-import com.mvg.virtualfs.storage.serialization.DuplexChannel
 import java.io.Closeable
+import java.nio.channels.SeekableByteChannel
 
 interface FileSystemSerializer : Closeable {
-    fun runSerializationAction( action: (DuplexChannel) -> Unit)
+    fun runSerializationAction( action: (SeekableByteChannel) -> Unit)
 }

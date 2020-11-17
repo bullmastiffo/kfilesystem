@@ -1,12 +1,12 @@
 package com.mvg.virtualfs.core
 
-import com.mvg.virtualfs.storage.serialization.DuplexChannel
+import java.nio.channels.SeekableByteChannel
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-class DuplexChannelFileSystemSerializer(private val channel: DuplexChannel) : FileSystemSerializer {
+class DuplexChannelFileSystemSerializer(private val channel: SeekableByteChannel) : FileSystemSerializer {
     private val lock = ReentrantLock()
-     override fun runSerializationAction(action: (DuplexChannel) -> Unit) {
+     override fun runSerializationAction(action: (SeekableByteChannel) -> Unit) {
         lock.withLock {
             action(channel)
         }

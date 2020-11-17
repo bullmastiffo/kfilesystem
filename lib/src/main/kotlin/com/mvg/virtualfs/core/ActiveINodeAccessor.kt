@@ -5,8 +5,8 @@ import arrow.core.right
 import com.mvg.virtualfs.storage.INode
 import com.mvg.virtualfs.storage.INode.Companion.OFFSETS_SIZE
 import com.mvg.virtualfs.storage.ceilDivide
-import com.mvg.virtualfs.storage.serialization.DuplexChannel
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
+import com.mvg.virtualfs.storage.writeLong
 import java.io.IOException
 import java.lang.IllegalArgumentException
 import java.nio.ByteBuffer
@@ -50,7 +50,7 @@ class ActiveINodeAccessor(
         TODO("Add indirect and double indirect blocks")
     }
 
-    override fun serialize(channel: DuplexChannel) {
+    override fun serialize(channel: SeekableByteChannel) {
         inode.created = viFsAttributeSet.created
         inode.lastModified = viFsAttributeSet.lastModified
         channel.position(offsetInUnderlyingStream)
@@ -65,26 +65,28 @@ class ActiveINodeAccessor(
             var blockCounter = INDIRECT_INDEX
 
             fun readIndirectBlock(position: Long) {
-                var ob: ByteBuffer? = null
+                var ob = ByteBuffer.allocate(blockSize)
                 coreFileSystem.runSerializationAction {
-                    ob = it.position(position)
-                            .readByteBuffer(blockSize)
+                    it.position(position)
+                            .read(ob)
                 }
-                while (ob!!.hasRemaining() && blockCounter < totalFileBlocks) {
-                    dataBlocks.add(ob!!.getLong())
+                ob.flip()
+                while (ob.hasRemaining() && blockCounter < totalFileBlocks) {
+                    dataBlocks.add(ob.getLong())
                     blockCounter++
                 }
             }
             readIndirectBlock(indirectPosition)
             if(blockCounter < totalFileBlocks){
                 val doubleIndirectPosition = inode.blockOffsets[DOUBLE_INDIRECT_INDEX]
-                var ob: ByteBuffer? = null
+                var ob = ByteBuffer.allocate(blockSize)
                 coreFileSystem.runSerializationAction {
-                    ob = it.position(doubleIndirectPosition)
-                            .readByteBuffer(blockSize)
+                    it.position(doubleIndirectPosition)
+                            .read(ob)
                 }
-                while (ob!!.hasRemaining() && blockCounter < totalFileBlocks) {
-                    val indirectIndex = ob!!.getLong()
+                ob.flip()
+                while (ob.hasRemaining() && blockCounter < totalFileBlocks) {
+                    val indirectIndex = ob.getLong()
                     if(indirectIndex == 0L)
                         break
                     readIndirectBlock(indirectIndex)
@@ -279,12 +281,11 @@ class ActiveINodeAccessor(
             {
                 val (offset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition)
                 val toRead = min(size, buffer.remaining())
-                var readBuffer: ByteBuffer? = null
+                var readBuffer = ByteBuffer.allocate(toRead)
                 coreFileSystem.runSerializationAction {
-                    readBuffer = it.position(offset).readByteBuffer(toRead)
+                    it.position(offset).read(readBuffer)
                 }
-                buffer.put(readBuffer!!.array())
-                buffer.position(toRead)
+                buffer.put(readBuffer.flip())
                 streamPosition+=toRead
                 read+=toRead
             }
@@ -300,7 +301,7 @@ class ActiveINodeAccessor(
                 val (offset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition, true)
                 val toWrite = min(size, buffer.remaining())
                 coreFileSystem.runSerializationAction {
-                    it.position(offset).writeByteBuffer( buffer.slice(buffer.position(), toWrite) )
+                    it.position(offset).write( buffer.slice(buffer.position(), toWrite) )
                     streamPosition+=toWrite
                     this@ActiveINodeAccessor.viFsAttributeSet.lastModifiedDate = coreFileSystem.time.now()
                     if(streamPosition > size()){
@@ -308,9 +309,8 @@ class ActiveINodeAccessor(
                     }
                     this@ActiveINodeAccessor.serialize(it)
                 }
-                buffer.position(toWrite)
+                buffer.position(buffer.position() + toWrite)
                 written+=toWrite
-
             }
             return written
         }

@@ -1,7 +1,6 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
-import com.mvg.virtualfs.storage.serialization.DuplexChannel
 import java.io.Closeable
 import java.nio.channels.SeekableByteChannel
 
@@ -27,7 +26,7 @@ interface INodeAccessor : Closeable {
      * Serializes inode to channel at current position.
      * @param channel DuplexChannel
      */
-    fun serialize(channel: DuplexChannel)
+    fun serialize(channel: SeekableByteChannel)
 
     /**
      * Gets input channel over the data in associated data blocks

@@ -7,9 +7,8 @@ import com.mvg.virtualfs.Time
 import com.mvg.virtualfs.core.folders.ActiveFolderHandler
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.FolderEntry
-import com.mvg.virtualfs.storage.serialization.DuplexChannel
-import com.mvg.virtualfs.storage.serialization.NioDuplexChannel
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
+import java.nio.channels.SeekableByteChannel
 
 class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
                            private val blockGroups: Array<FileSystemAllocator>,
@@ -58,7 +57,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         }
         val terminatingEntry = FolderEntry.TerminatingEntry
 
-        val ch = NioDuplexChannel(inode.getSeekableByteChannel(this))
+        val ch = inode.getSeekableByteChannel(this)
         serializeToChannel(ch, terminatingEntry)
         serializer.runSerializationAction {
             inode.serialize(it)
@@ -161,7 +160,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         return Either.Right(Unit)
     }
 
-    override fun runSerializationAction(action: (DuplexChannel) -> Unit) {
+    override fun runSerializationAction(action: (SeekableByteChannel) -> Unit) {
         serializer.runSerializationAction(action)
     }
 

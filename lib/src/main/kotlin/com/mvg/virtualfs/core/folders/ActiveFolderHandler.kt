@@ -5,7 +5,6 @@ import arrow.core.left
 import arrow.core.right
 import com.mvg.virtualfs.core.*
 import com.mvg.virtualfs.storage.FolderEntry
-import com.mvg.virtualfs.storage.serialization.NioDuplexChannel
 import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -77,9 +76,8 @@ class ActiveFolderHandler(
 
             val map = LinkedHashMap<String, NamedItemDescriptor>()
             val channel = inodeAccessor.getSeekableByteChannel(coreFileSystem)
-            val wrapped = NioDuplexChannel(channel)
             do {
-                val entry = deserializeFromChannel<FolderEntry>(wrapped)
+                val entry = deserializeFromChannel<FolderEntry>(channel)
                 map[entry.name] = when(val r = coreFileSystem.getInodeItemDescriptor(entry.inodeId))
                 {
                     is Either.Right -> NamedItemDescriptor(entry.name, r.b)

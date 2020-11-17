@@ -3,9 +3,7 @@ package com.mvg.virtualfs
 import com.mvg.virtualfs.storage.BlockGroup
 import com.mvg.virtualfs.storage.*
 import com.mvg.virtualfs.storage.SuperGroup
-import com.mvg.virtualfs.storage.serialization.NioDuplexChannel
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
-import java.nio.ByteBuffer
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -34,20 +32,19 @@ fun formatViFileSystem(filePath: Path, settings: ViFileSystemSettings) {
     val dataBlocksPerGroup = blocksPerGroup - BlockGroup.sizeInBlocks(blockSize, blocksPerGroup, inodesPerGroup)
 
     Files.newByteChannel(filePath, StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE).use {
-        val duplexChannel = NioDuplexChannel(it)
         var offset = FIRST_BLOCK_OFFSET;
 
         var inodesIndex = 0
         for(blockNumber in 0 until totalBlockGroups) {
-            duplexChannel.position(offset)
+            it.position(offset)
             var block = BlockGroup(blockSize, dataBlocksPerGroup, inodesPerGroup, offset, inodesIndex)
-            serializeToChannel(duplexChannel, block)
+            serializeToChannel(it, block)
             offset+= blockGroupSize
             inodesIndex+=inodesPerGroup
         }
         // allocate full size on stream
-        duplexChannel.position(offset-1)
-        duplexChannel.writeByte(0)
+        it.position(offset-1)
+        it.writeByte(0)
 
         val superBlock = SuperGroup(
                 blockSize,
@@ -56,9 +53,8 @@ fun formatViFileSystem(filePath: Path, settings: ViFileSystemSettings) {
                 dataBlocksPerGroup * totalBlockGroups,
                 totalNodes,
                 blocksPerGroup, inodesPerGroup)
-        duplexChannel.position(0)
-        serializeToChannel(duplexChannel, superBlock)
-        duplexChannel.close()
+        it.position(0)
+        serializeToChannel(it, superBlock)
         //TODO init filesystem, create root folder
     }
 }

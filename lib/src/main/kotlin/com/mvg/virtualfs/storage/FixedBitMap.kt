@@ -64,6 +64,7 @@ class FixedBitMap(private val byteArray: ByteArray) {
         return Pair(byteIndex, bitIndex)
     }
 
+    internal fun toByteArray(): ByteArray = byteArray
     internal fun toByteBuffer(): ByteBuffer = ByteBuffer.wrap(byteArray)
 
     companion object{

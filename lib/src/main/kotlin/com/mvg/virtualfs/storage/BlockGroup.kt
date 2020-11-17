@@ -35,6 +35,10 @@ class BlockGroup (
     {
     }
 
+    fun size() : Int{
+        return sizeInBytes(numberOfBlocks, numberOfInodes)
+    }
+
     companion object{
         fun sizeInBytes(numberOfBlocks: Int, numberOfInodes: Int): Int{
             return (5 * Int.SIZE_BYTES + Long.SIZE_BYTES

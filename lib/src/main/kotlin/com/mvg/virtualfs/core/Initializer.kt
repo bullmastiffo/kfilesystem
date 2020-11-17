@@ -4,11 +4,11 @@ import arrow.core.Either
 import com.mvg.virtualfs.SystemTime
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.SuperGroup
-import com.mvg.virtualfs.storage.serialization.DuplexChannel
 import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
+import java.nio.channels.SeekableByteChannel
 
-fun initializeViFilesystem(channel: DuplexChannel): Either<CoreFileSystemError, ViFileSystem>{
-    if(channel.position != 0L){
+fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemError, ViFileSystem>{
+    if(channel.position() != 0L){
         channel.position(0L)
     }
     val sg = deserializeFromChannel<SuperGroup>(channel)

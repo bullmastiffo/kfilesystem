@@ -6,6 +6,7 @@ import arrow.core.right
 import com.mvg.virtualfs.storage.BlockGroup
 import com.mvg.virtualfs.storage.INode
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
+import com.mvg.virtualfs.storage.writeByte
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
