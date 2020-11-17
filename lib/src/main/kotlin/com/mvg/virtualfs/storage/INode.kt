@@ -8,6 +8,7 @@ import java.util.*
 class INode(
         val id: Int,
         var type: NodeType,
+        var dataSize: Long,
         var created: Date?,
         var lastModified: Date?,
         val blockOffsets: LongArray) {
@@ -15,15 +16,15 @@ class INode(
     constructor(_id: Int,
                 _type: NodeType,
                 _created: Date?,
-                _lastModified: Date?) : this(_id, _type, _created, _lastModified, LongArray(OFFSETS_SIZE))
+                _lastModified: Date?) : this(_id, _type, 0L, _created, _lastModified, LongArray(OFFSETS_SIZE))
     {}
 
     companion object
     {
         const val OFFSETS_SIZE : Int = 13
         fun sizeInBytes(): Int {
-            // Int.SIZE_BYTES + Byte.SIZE_BYTES + 2 * Long.SIZE_BYTES + OFFSETS_SIZE * Long.SIZE_BYTES
-            return 125
+            // Int.SIZE_BYTES + Byte.SIZE_BYTES + 3 * Long.SIZE_BYTES + OFFSETS_SIZE * Long.SIZE_BYTES
+            return 133
         }
     }
 }

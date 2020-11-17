@@ -1,6 +1,7 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
+import com.mvg.virtualfs.SystemTime
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.SuperGroup
 import com.mvg.virtualfs.storage.serialization.DuplexChannel
@@ -24,11 +25,12 @@ fun initializeViFilesystem(channel: DuplexChannel): Either<CoreFileSystemError, 
             accessor,
             blockGroups,
             DuplexChannelFileSystemSerializer(channel),
-            PrimitiveLockManager<Int>())
+            PrimitiveLockManager<Int>(),
+            SystemTime)
     var rootFolder = coreFs.getOrCreateRootFolder()
     return when(rootFolder){
         is Either.Left -> rootFolder
-        is Either.Right -> Either.Right(ViFileSystem(rootFolder.b as FolderHandler))
+        is Either.Right -> Either.Right(ViFileSystem(rootFolder.b as FolderHandler, coreFs))
     }
 }
 

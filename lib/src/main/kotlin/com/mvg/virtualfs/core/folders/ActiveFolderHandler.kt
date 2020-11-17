@@ -5,6 +5,7 @@ import arrow.core.left
 import arrow.core.right
 import com.mvg.virtualfs.core.*
 import com.mvg.virtualfs.storage.FolderEntry
+import com.mvg.virtualfs.storage.serialization.NioDuplexChannel
 import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -22,7 +23,7 @@ class ActiveFolderHandler(
     private var itemsMap: LinkedHashMap<String, NamedItemDescriptor>? = null
     private val lock = ReentrantReadWriteLock()
 
-    override fun listItems(): Either<CoreFileSystemError, Iterable<NamedItemDescriptor>> {
+    override fun listItems(): Either<CoreFileSystemError, List<NamedItemDescriptor>> {
         when(val r = ensureFolderRead()){
             is Either.Left -> return r
         }
@@ -75,16 +76,17 @@ class ActiveFolderHandler(
             }
 
             val map = LinkedHashMap<String, NamedItemDescriptor>()
-            inodeAccessor.getDataInputChannel(coreFileSystem).use {
-                do {
-                    val entry = deserializeFromChannel<FolderEntry>(it)
-                    map[entry.name] = when(val r = coreFileSystem.getInodeItemDescriptor(entry.inodeId))
-                    {
-                        is Either.Right -> NamedItemDescriptor(entry.name, r.b)
-                        is Either.Left -> return r
-                    }
-                } while (entry != FolderEntry.TerminatingEntry)
-            }
+            val channel = inodeAccessor.getSeekableByteChannel(coreFileSystem)
+            val wrapped = NioDuplexChannel(channel)
+            do {
+                val entry = deserializeFromChannel<FolderEntry>(wrapped)
+                map[entry.name] = when(val r = coreFileSystem.getInodeItemDescriptor(entry.inodeId))
+                {
+                    is Either.Right -> NamedItemDescriptor(entry.name, r.b)
+                    is Either.Left -> return r
+                }
+            } while (entry != FolderEntry.TerminatingEntry)
+
             itemsMap = map
         }
         return Unit.right()

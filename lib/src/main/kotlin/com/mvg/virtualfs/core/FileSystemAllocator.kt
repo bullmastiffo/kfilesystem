@@ -1,7 +1,6 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
-import com.mvg.virtualfs.storage.INode
 import java.util.concurrent.locks.Lock
 
 interface FileSystemAllocator: BlockAllocator, InodeAllocator {
@@ -18,8 +17,8 @@ interface BlockAllocator{
 interface InodeAllocator{
     val freeINodes: Int
 
-    fun acquireInode(lock: Lock): Either<CoreFileSystemError, INodeAccessor>
-    fun getInode(id: Int): Either<CoreFileSystemError, ItemDescriptor>
-    fun reserveInode(serializer: FileSystemSerializer, lock: Lock): Either<CoreFileSystemError, INodeAccessor>
-    fun markInodeFree(serializer: FileSystemSerializer, inode: INodeAccessor): Either<CoreFileSystemError, Unit>
+    fun acquireInode(inodeId: Int, lock: Lock): Either<CoreFileSystemError, INodeAccessor>
+    fun getInode(inodeId: Int): Either<CoreFileSystemError, ItemDescriptor>
+    fun reserveInode(coreFileSystem: CoreFileSystem, lock: Lock): Either<CoreFileSystemError, INodeAccessor>
+    fun markInodeFree(coreFileSystem: CoreFileSystem, inode: INodeAccessor): Either<CoreFileSystemError, Unit>
 }

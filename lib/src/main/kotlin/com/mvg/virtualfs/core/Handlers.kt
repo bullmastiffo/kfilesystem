@@ -2,6 +2,7 @@ package com.mvg.virtualfs.core
 
 import arrow.core.Either
 import java.io.Closeable
+import java.nio.channels.SeekableByteChannel
 import java.util.*
 
 interface AttributeSet {
@@ -33,7 +34,7 @@ class NamedItemDescriptor(
         _type,
         _attributeSet)
 {
-    constructor(_name: String,descr: ItemDescriptor ): this(descr.nodeId, descr.type, descr.attributeSet, _name)
+    constructor(_name: String, d: ItemDescriptor ): this(d.nodeId, d.type, d.attributeSet, _name)
 }
 
 
@@ -41,11 +42,12 @@ data class ItemTemplate(val name: String, val type: ItemType){
 }
 
 interface FileHandler: ItemHandler{
-
+    val descriptor: NamedItemDescriptor
+    fun getStream() : SeekableByteChannel
 }
 
 interface FolderHandler : ItemHandler {
-    fun listItems(): Either<CoreFileSystemError, Iterable<NamedItemDescriptor>>
+    fun listItems(): Either<CoreFileSystemError, List<NamedItemDescriptor>>
     fun getItem(name: String): Either<CoreFileSystemError, ItemHandler>
     fun createItem(item: ItemTemplate): ItemHandler
 }

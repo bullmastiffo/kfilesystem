@@ -30,6 +30,30 @@ class FixedBitMap(private val byteArray: ByteArray) {
         byteArray[byteIndex] = b.toByte()
     }
 
+    fun getHoldingByteAndIndex(n: Int): Pair<Byte, Int>
+    {
+        val (byteIndex, _) = checkAndGetIndexes(n)
+        return Pair(byteArray[byteIndex], byteIndex)
+    }
+
+    fun nextClearBit(): Int {
+        var byteIndex = 0
+        while(byteArray[byteIndex] == FILLED_BYTE && byteIndex < byteArray.size) {
+            byteIndex++
+        }
+
+        if(byteIndex == byteArray.size){
+            return -1
+        }
+        var b = byteArray[byteIndex].toInt() and 0xFF
+        var i = 0
+        while (b and (1 shl i) > 0){
+            i++
+        }
+
+        return byteIndex * Byte.SIZE_BITS + i
+    }
+
     private fun checkAndGetIndexes(n: Int): Pair<Int, Int>
     {
         val byteIndex = ceilDivide(n, Byte.SIZE_BITS)
@@ -43,6 +67,7 @@ class FixedBitMap(private val byteArray: ByteArray) {
     internal fun toByteBuffer(): ByteBuffer = ByteBuffer.wrap(byteArray)
 
     companion object{
+        const val FILLED_BYTE: Byte = -1
         fun getBytesSize(size: Int) = ceilDivide(size, Byte.SIZE_BITS)
     }
 }

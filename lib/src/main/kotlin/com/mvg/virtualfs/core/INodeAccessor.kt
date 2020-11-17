@@ -2,8 +2,8 @@ package com.mvg.virtualfs.core
 
 import arrow.core.Either
 import com.mvg.virtualfs.storage.serialization.DuplexChannel
-import com.mvg.virtualfs.storage.serialization.InputChannel
 import java.io.Closeable
+import java.nio.channels.SeekableByteChannel
 
 /**
  * Provides instruments to work with inode instance
@@ -33,5 +33,5 @@ interface INodeAccessor : Closeable {
      * Gets input channel over the data in associated data blocks
      * @return Either<CoreFileSystemError, DuplexChannel>
      */
-    fun getDataInputChannel(coreFileSystem: CoreFileSystem): InputChannel
+    fun getSeekableByteChannel(coreFileSystem: CoreFileSystem): SeekableByteChannel
 }

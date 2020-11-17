@@ -1,8 +1,11 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
+import com.mvg.virtualfs.Time
+import java.io.Closeable
 
-interface CoreFileSystem  {
+interface CoreFileSystem : FileSystemSerializer, Closeable  {
+    val time: Time
     fun reserveBlockAndGetOffset(inodeId: Int): Either<CoreFileSystemError, Long>
     fun freeBlock(offset: Long): Either<CoreFileSystemError, Unit>
     fun initializeItemHandler(entry: NamedItemDescriptor): Either<CoreFileSystemError, ItemHandler>

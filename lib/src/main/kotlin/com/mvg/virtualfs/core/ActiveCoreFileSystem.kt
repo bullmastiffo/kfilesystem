@@ -3,15 +3,19 @@ package com.mvg.virtualfs.core
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
+import com.mvg.virtualfs.Time
 import com.mvg.virtualfs.core.folders.ActiveFolderHandler
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.FolderEntry
+import com.mvg.virtualfs.storage.serialization.DuplexChannel
+import com.mvg.virtualfs.storage.serialization.NioDuplexChannel
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
 
 class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
                            private val blockGroups: Array<FileSystemAllocator>,
                            private val serializer: FileSystemSerializer,
-                           private val lockManager: LockManager<Int>) : CoreFileSystem {
+                           private val lockManager: LockManager<Int>,
+                           override val time: Time) : CoreFileSystem {
 
     private val blockGroupSize = superGroup.blockSize * superGroup.blockPerGroup
 
@@ -54,9 +58,10 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         }
         val terminatingEntry = FolderEntry.TerminatingEntry
 
+        val ch = NioDuplexChannel(inode.getSeekableByteChannel(this))
+        serializeToChannel(ch, terminatingEntry)
         serializer.runSerializationAction {
             inode.serialize(it)
-            serializeToChannel(it.position(offset), terminatingEntry)
         }
         return Either.Right(inode)
     }
@@ -90,7 +95,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         {
             return CoreFileSystemError.ItemAlreadyOpenedError.left()
         }
-        val acc = when(val r = blockGroups[blockGroupIndex].acquireInode(itemLock)){
+        val acc = when(val r = blockGroups[blockGroupIndex].acquireInode(entry.nodeId, itemLock)){
             is Either.Left -> {itemLock.unlock(); return r}
             is Either.Right -> r.b
         }
@@ -110,7 +115,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
     override fun reserveInode(): Either<CoreFileSystemError, INodeAccessor> {
         val lock = lockManager.createFreeLock()
         lock.lock()
-        return when(val r = reserveAndGetItem(0, { it.reserveInode(serializer, lock) }, CoreFileSystemError.CantCreateMoreItemsError))
+        return when(val r = reserveAndGetItem(0, { it.reserveInode(this, lock) }, CoreFileSystemError.CantCreateMoreItemsError))
         {
             is Either.Left -> r
             is Either.Right -> {
@@ -148,12 +153,22 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
 
     override fun freeInode(nodeAccessor: INodeAccessor): Either<CoreFileSystemError, Unit> {
         val blockGroupIndex = getInodeBlockGroupIndex(nodeAccessor.id)
-        when (val r = blockGroups[blockGroupIndex].markInodeFree(serializer, nodeAccessor))
+        when (val r = blockGroups[blockGroupIndex].markInodeFree(this, nodeAccessor))
         {
             is Either.Left -> return r
         }
         superGroup.incrementFreeInodeCount()
         return Either.Right(Unit)
+    }
+
+    override fun runSerializationAction(action: (DuplexChannel) -> Unit) {
+        serializer.runSerializationAction(action)
+    }
+
+    override fun close() {
+        // TODO("Not yet implemented")
+        // release all handlers forcefully
+        serializer.close()
     }
 
     private fun getDataBlockGroupIndex(offset: Long) = ((offset - FIRST_BLOCK_OFFSET) / blockGroupSize).toInt()

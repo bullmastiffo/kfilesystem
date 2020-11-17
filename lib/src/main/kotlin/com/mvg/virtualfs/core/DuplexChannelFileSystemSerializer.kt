@@ -11,4 +11,8 @@ class DuplexChannelFileSystemSerializer(private val channel: DuplexChannel) : Fi
             action(channel)
         }
     }
+
+    override fun close() {
+        channel.close()
+    }
 }

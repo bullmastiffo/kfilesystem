@@ -63,6 +63,7 @@ object INodeSerializer: OutputChannelSerializer<INode> {
     override fun serialize(channel: OutputChannel, value: INode) {
         channel.writeInt(value.id)
         channel.writeByte(value.type.type)
+        channel.writeLong(value.dataSize)
         channel.writeDate(value.created)
         channel.writeDate(value.lastModified)
         value.blockOffsets.forEach { channel.writeLong(it) }
@@ -71,13 +72,14 @@ object INodeSerializer: OutputChannelSerializer<INode> {
     override fun deserialize(channel: InputChannel): INode {
         val id = channel.readInt()
         val type = channel.readByte()
+        val dataSize = channel.readLong()
         val created = channel.readDate()
         val lm = channel.readDate()
         val offsets = LongArray(INode.OFFSETS_SIZE)
         for(i in 0 until INode.OFFSETS_SIZE)
             offsets[i] = channel.readLong()
 
-        return INode(id, NodeType.fromByte(type), created, lm, offsets)
+        return INode(id, NodeType.fromByte(type), dataSize, created, lm, offsets)
     }
 }
 
