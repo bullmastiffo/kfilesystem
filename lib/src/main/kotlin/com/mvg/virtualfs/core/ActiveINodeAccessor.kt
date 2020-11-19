@@ -33,6 +33,8 @@ class ActiveINodeAccessor(
         set(value) { inode.type = value }
     override val attributeSet: AttributeSet
         get() = viFsAttributeSet
+    override val size: Long
+        get() = inode.dataSize
 
     override fun addDataBlock(coreFileSystem: CoreFileSystem, offset: Long): Either<CoreFileSystemError, Long> {
         var foundIndex = 1
@@ -279,9 +281,10 @@ class ActiveINodeAccessor(
             var read = 0
             while(buffer.hasRemaining() && streamPosition < size())
             {
-                val (offset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition)
+                val (startBlockOffset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition)
                 val toRead = min(size, buffer.remaining())
-                var readBuffer = ByteBuffer.allocate(toRead)
+                val readBuffer = ByteBuffer.allocate(toRead)
+                val offset = startBlockOffset + streamPosition
                 coreFileSystem.runSerializationAction {
                     it.position(offset).read(readBuffer)
                 }
@@ -298,8 +301,9 @@ class ActiveINodeAccessor(
             var written = 0
             while(buffer.hasRemaining())
             {
-                val (offset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition, true)
+                val (startBlockoffset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition, true)
                 val toWrite = min(size, buffer.remaining())
+                val offset = startBlockoffset + streamPosition
                 coreFileSystem.runSerializationAction {
                     it.position(offset).write( buffer.slice(buffer.position(), toWrite) )
                     streamPosition+=toWrite

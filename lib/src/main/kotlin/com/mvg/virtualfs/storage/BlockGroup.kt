@@ -16,6 +16,8 @@ class BlockGroup (
         val inodes: Array<INode>) {
 
     val startBlockOffset = dataBlocksOffset - sizeInBlocks(blockSize, numberOfBlocks, numberOfInodes) * blockSize
+    val freeBlocksCountOffset = startBlockOffset + 3 * Int.SIZE_BYTES
+    val freeInodesCountOffset = startBlockOffset + 4 * Int.SIZE_BYTES
     val bitmapBlocksOffset = startBlockOffset +  5 * Int.SIZE_BYTES + Long.SIZE_BYTES
     val bitmapInodesOffset = bitmapBlocksOffset + ceilDivide(numberOfBlocks, Byte.SIZE_BITS)
     val inodesOffset = bitmapInodesOffset + ceilDivide(numberOfInodes, Byte.SIZE_BITS)

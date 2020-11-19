@@ -2,34 +2,99 @@ package com.mvg.app
 
 import arrow.core.Either
 import com.mvg.virtualfs.*
-import com.mvg.virtualfs.core.ViFileSystem
+import com.mvg.virtualfs.ViFileSystem
 import com.mvg.virtualfs.core.initializeViFilesystem
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption
 
 fun main(args: Array<String>) {
-    val fileName = "D:\\temp\\vi.fs"
     val localFs = FileSystems.getDefault()
-    val virtualFsPath = localFs.getPath(fileName)
-    if(Files.exists(virtualFsPath))
+
+    println("Hello to virtual fs!\nmount <fileName>\tmount")
+    var fs: ViFileSystem? = null
+    while (true)
     {
-        Files.delete(virtualFsPath)
-    }
-    var settins = ViFileSystemSettings(100L * (1L shl 20), BlockSize.Block1Kb)
-    formatViFileSystem(virtualFsPath, settins)
-    println("Hello World!")
-    val ch = Files.newByteChannel(virtualFsPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
-    val fs = when(val r = initializeViFilesystem(ch)){
-        is Either.Left -> {
-            println("failed to initialize system ${r.a}")
-            return
+        val cmd = readLine()?.split(' ') ?: break
+        try {
+            when (cmd[0]) {
+                "quit" -> break
+                "mount" -> {
+                    if (cmd.size < 2) {
+                        println("too little parameters")
+                        continue
+                    }
+                    val virtualFsPath = localFs.getPath(cmd[1])
+                    if (!Files.exists(virtualFsPath)) {
+                        println("File doesn't exist.")
+                    }
+                    val ch = Files.newByteChannel(virtualFsPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
+                    fs = when (val r = initializeViFilesystem(ch)) {
+                        is Either.Left -> {
+                            println("failed to initialize system ${r.a}")
+                            continue
+                        }
+                        is Either.Right -> r.b
+                    }
+                    println("Mounted")
+                }
+                "format" -> {
+                    if (cmd.size < 4) {
+                        println("too little parameters")
+                        continue
+                    }
+                    val sz = cmd[1].toLongOrNull() ?: 100L * (1L shl 20)
+                    val block = cmd[2].toIntOrNull() ?: 1
+                    val blockSz = when (block) {
+                        1 -> BlockSize.Block1Kb
+                        2 -> BlockSize.Block2Kb
+                        else -> BlockSize.Block4Kb
+                    }
+                    val virtualFsPath = localFs.getPath(cmd[3])
+                    if (Files.exists(virtualFsPath)) {
+                        Files.delete(virtualFsPath)
+                    }
+                    var settins = ViFileSystemSettings(sz, blockSz)
+                    formatViFileSystem(virtualFsPath, settins)
+                    println("Formatted")
+                }
+                "ls" -> {
+                    if (cmd.size < 2) {
+                        println("too little parameters")
+                        continue
+                    }
+                    if (fs == null) {
+                        println("no file system")
+                        continue
+                    }
+                    val path = cmd[1]
+                    println("$path folder contains:")
+                    fs.getFiles(path).forEach {
+                        println("${it.name}\t\t${it.created}\t\t${it.lastModified}\t\t${it.type}")
+                    }
+                }
+                "mkdir" -> {
+                    if (fs == null) {
+                        println("no file system")
+                        continue
+                    }
+                    if (cmd.size < 3) {
+                        println("too little parameters")
+                        continue
+                    }
+                    val path = cmd[1]
+                    val name = cmd[2]
+                    val fi = fs.createFolder(path, name)
+                    println("created ${fi.name}")
+                }
+                else ->{
+                    println("unknown")
+                }
+            }
         }
-        is Either.Right -> r.b
-    }.use {
-        println("Root folder contains:")
-        it.getFiles("${ViFileSystem.PATH_DELIMITER}").forEach {
-            println("${it.name}\t\t${it.created}\t\t${it.lastModified}\t\t${it.type}")
+        catch (e: Throwable){
+            println("Continue at your own risk! Exception: $e")
         }
     }
+    fs?.close()
 }

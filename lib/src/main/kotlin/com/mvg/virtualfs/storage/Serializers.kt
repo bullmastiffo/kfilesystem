@@ -14,9 +14,9 @@ object BlockGroupSerializer: OutputChannelSerializer<BlockGroup> {
         .putInt(value.blockSize)
         .putInt(value.numberOfBlocks)
         .putInt(value.numberOfInodes)
-        .putLong(value.dataBlocksOffset)
         .putInt(value.freeBlocksCount)
         .putInt(value.freeInodesCount)
+        .putLong(value.dataBlocksOffset)
         .put(value.blockBitMap.toByteArray())
         .put(value.inodesBitMap.toByteArray())
         channel.write(buffer.flip())
@@ -28,9 +28,9 @@ object BlockGroupSerializer: OutputChannelSerializer<BlockGroup> {
         val blockSize = buffer.getInt()
         val numberOfBlocks = buffer.getInt()
         val numberOfInodes = buffer.getInt()
-        val dataBlocksOffset = buffer.getLong()
         val freeBlocksCount = buffer.getInt()
         val freeInodesCount = buffer.getInt()
+        val dataBlocksOffset = buffer.getLong()
 
         buffer = channel.readBuffer(FixedBitMap.getBytesSize(numberOfBlocks), "BlockGroup.blockBitMap")
         val blockBitMap = FixedBitMap(buffer.array())
@@ -101,7 +101,7 @@ object INodeSerializer: OutputChannelSerializer<INode> {
 }
 
 object FolderEntrySerializer: OutputChannelSerializer<FolderEntry> {
-    private val FolderEntryFixedPartSize = Int.SIZE_BYTES + Byte.SIZE_BYTES + Short.SIZE_BYTES
+    private const val FolderEntryFixedPartSize = Int.SIZE_BYTES + Byte.SIZE_BYTES + Short.SIZE_BYTES
     override fun serialize(channel: WritableByteChannel, value: FolderEntry) {
         val name = value.name.toByteArray()
         val buffer = ByteBuffer.allocate(name.size + FolderEntryFixedPartSize)
@@ -135,6 +135,13 @@ fun WritableByteChannel.writeByte(value: Byte)
 {
     var buffer = ByteBuffer.allocate(1)
     buffer.put(value)
+    this.write(buffer.flip())
+}
+
+fun WritableByteChannel.writeInt(value: Int)
+{
+    var buffer = ByteBuffer.allocate(Int.SIZE_BYTES)
+    buffer.putInt(value)
     this.write(buffer.flip())
 }
 

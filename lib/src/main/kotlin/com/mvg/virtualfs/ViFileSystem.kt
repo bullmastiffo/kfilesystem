@@ -1,9 +1,7 @@
-package com.mvg.virtualfs.core
+package com.mvg.virtualfs
 
 import arrow.core.Either
-import com.mvg.virtualfs.FileInfo
-import com.mvg.virtualfs.FileOpenMode
-import com.mvg.virtualfs.FileSystem
+import com.mvg.virtualfs.core.*
 import java.io.Closeable
 import java.io.IOException
 import java.nio.channels.SeekableByteChannel
@@ -29,13 +27,21 @@ class ViFileSystem(
     override fun getFiles(path: String): Iterable<FileInfo> {
         var folder = navigateToFolder(path)
         val list = unwrapOrThrow({ folder.listItems() }, "Error listing items %s")
-        folder.close()
+        closeNonRootFolder(folder)
 
-        return list.map { FileInfo(it.name, it.type, it.attributeSet.created, it.attributeSet.lastModified) }
+        return list.map { mapToFileInfo(it) }
     }
 
+    private fun mapToFileInfo(it: NamedItemDescriptor) =
+            FileInfo(it.name, it.type, it.attributeSet.created, it.attributeSet.lastModified)
+
     override fun createFolder(path: String, name: String): FileInfo {
-        TODO("Not yet implemented")
+        var folder = navigateToFolder(path)
+        unwrapOrThrow( { folder.createItem(ItemTemplate(name, ItemType.Folder)) }, "Error creating folder %s")
+            .use {
+                closeNonRootFolder(folder)
+                return mapToFileInfo(it.descriptor)
+            }
     }
 
     override fun deleteFolder(path: String) {
@@ -57,19 +63,21 @@ class ViFileSystem(
             throw IOException("path must start with $PATH_DELIMITER")
         }
         var folder = rootFolder
-        path.split(PATH_DELIMITER).forEach {
-            if (it != "") {
-                val item = unwrapOrThrow({ folder.getItem(it) }, "Error reading folder %s")
-                if (item !is FolderHandler) {
-                    item.close()
-                    throw IOException("item $it is not a folder")
-                }
-                if (folder != rootFolder)
-                    folder.close()
-                folder = item
+        path.split(PATH_DELIMITER).filter { it.isNotBlank() }.forEach {
+            val item = unwrapOrThrow({ folder.getItem(it) }, "Error reading folder %s")
+            if (item !is FolderHandler) {
+                item.close()
+                throw IOException("item $it is not a folder")
             }
+            closeNonRootFolder(folder)
+            folder = item
         }
         return folder
+    }
+
+    private fun closeNonRootFolder(folder: FolderHandler) {
+        if (folder != rootFolder)
+            folder.close()
     }
 
     private fun<T> unwrapOrThrow(action:()-> Either<CoreFileSystemError, T>, errorTemplate: String): T
@@ -82,5 +90,6 @@ class ViFileSystem(
 
     companion object {
         const val PATH_DELIMITER = '/'
+        const val MAX_FILENAME_LENGTH = 255
     }
 }

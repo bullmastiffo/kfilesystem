@@ -8,6 +8,8 @@ sealed class CoreFileSystemError {
     object FileSystemCorruptedError: CoreFileSystemError()
     object ItemClosedError: CoreFileSystemError()
     object ItemAlreadyOpenedError: CoreFileSystemError()
+    object InvalidItemNameError: CoreFileSystemError()
+    object ItemWithSameNameAlreadyExistsError: CoreFileSystemError()
 
     class UnderlyingIOExceptionError(val ex: IOException): CoreFileSystemError()
 

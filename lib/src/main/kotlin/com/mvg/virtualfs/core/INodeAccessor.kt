@@ -13,6 +13,7 @@ interface INodeAccessor : Closeable {
     val id: Int
     var type: NodeType
     val attributeSet: AttributeSet
+    val size: Long
 
     /**
      * Adds data block to given inode. Returns added offset value on success.

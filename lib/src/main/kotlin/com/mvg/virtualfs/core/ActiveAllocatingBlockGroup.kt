@@ -6,13 +6,26 @@ import arrow.core.right
 import com.mvg.virtualfs.storage.BlockGroup
 import com.mvg.virtualfs.storage.INode
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
-import com.mvg.virtualfs.storage.writeByte
+import com.mvg.virtualfs.storage.*
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGroup: BlockGroup): FileSystemAllocator {
+/**
+ * Basic implementation of AllocatingBlockGroup
+ * @property groupId Int
+ * @property blockGroup BlockGroup
+ * @property freeBlocksCounter AtomicInteger
+ * @property freeInodesCounter AtomicInteger
+ * @property blocksLock ReentrantLock
+ * @property inodesLock ReentrantLock
+ * @property id Int
+ * @property freeBlocks Int
+ * @property freeInodes Int
+ * @constructor
+ */
+class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGroup: BlockGroup): AllocatingBlockGroup {
 
     private val freeBlocksCounter = AtomicInteger(blockGroup.freeBlocksCount)
     private val freeInodesCounter = AtomicInteger(blockGroup.freeInodesCount)
@@ -26,17 +39,19 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
         get() = freeBlocksCounter.get()
 
     override fun reserveBlockAndGetOffset(serializer: FileSystemSerializer): Either<CoreFileSystemError, Long> {
-        if(freeBlocksCounter.getAndDecrement() < 0){
+        if(freeBlocksCounter.getAndDecrement() <= 0){
             freeBlocksCounter.incrementAndGet()
             return CoreFileSystemError.VolumeIsFullError.left()
         }
         var blockIndex: Int
-        blocksLock.withLock {
+        blocksLock.withLock { // TODO serialize count correctly
             blockIndex = blockGroup.blockBitMap.nextClearBit()
             blockGroup.blockBitMap.flipBit(blockIndex)
+            blockGroup.freeBlocksCount--
             val (byte, index) = blockGroup.blockBitMap.getHoldingByteAndIndex(blockIndex)
             val offset = blockGroup.bitmapBlocksOffset + index
             serializer.runSerializationAction {
+                it.position(blockGroup.freeBlocksCountOffset).writeInt(blockGroup.freeBlocksCount)
                 it.position(offset).writeByte(byte)
             }
         }
@@ -47,22 +62,24 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
         val blockIndex = ((offset - blockGroup.dataBlocksOffset) / blockGroup.blockSize).toInt()
         blocksLock.withLock {
             blockGroup.blockBitMap.flipBit(blockIndex)
+            blockGroup.freeBlocksCount++
             val (byte, index) = blockGroup.blockBitMap.getHoldingByteAndIndex(blockIndex)
             val byteOffset = blockGroup.bitmapBlocksOffset + index
             serializer.runSerializationAction {
                 it.position(byteOffset).writeByte(byte)
+                it.position(blockGroup.freeBlocksCountOffset).writeInt(blockGroup.freeBlocksCount)
             }
         }
         freeBlocksCounter.incrementAndGet()
         return Unit.right()
     }
 
-    override val freeINodes: Int
+    override val freeInodes: Int
         get() = freeInodesCounter.get()
 
     override fun acquireInode(inodeId: Int, lock: Lock): Either<CoreFileSystemError, INodeAccessor> {
         val inodeIndex = inodeId - blockGroup.inodes[0].id
-        if (inodeIndex >= blockGroup.inodes.size)
+        if (inodeIndex !in blockGroup.inodes.indices)
         {
             CoreFileSystemError.FileSystemCorruptedError.left()
         }
@@ -76,7 +93,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
 
     override fun getInode(inodeId: Int): Either<CoreFileSystemError, ItemDescriptor> {
         val inodeIndex = inodeId - blockGroup.inodes[0].id
-        if (inodeIndex >= blockGroup.inodes.size)
+        if (inodeIndex !in blockGroup.inodes.indices)
         {
             CoreFileSystemError.FileSystemCorruptedError.left()
         }
@@ -91,7 +108,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
     }
 
     override fun reserveInode(coreFileSystem: CoreFileSystem, lock: Lock): Either<CoreFileSystemError, INodeAccessor> {
-        if(freeInodesCounter.getAndDecrement() < 0){
+        if(freeInodesCounter.getAndDecrement() <= 0){
             freeInodesCounter.incrementAndGet()
             return CoreFileSystemError.CantCreateMoreItemsError.left()
         }
@@ -101,7 +118,9 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
             blockGroup.inodesBitMap.flipBit(inodeIndex)
             val (byte, index) = blockGroup.inodesBitMap.getHoldingByteAndIndex(inodeIndex)
             val offset = blockGroup.bitmapInodesOffset + index
+            blockGroup.freeInodesCount--
             coreFileSystem.runSerializationAction {
+                it.position(blockGroup.freeInodesCountOffset).writeInt(blockGroup.freeInodesCount)
                 it.position(offset).writeByte(byte)
             }
         }
@@ -121,6 +140,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
         }
         inodesLock.withLock {
             blockGroup.inodesBitMap.flipBit(inodeIndex)
+            blockGroup.freeInodesCount++
             val (byte, index) = blockGroup.inodesBitMap.getHoldingByteAndIndex(inodeIndex)
             val offset = blockGroup.bitmapInodesOffset + index
             blockGroup.inodes[inodeIndex].type = NodeType.None
@@ -128,6 +148,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
             blockGroup.inodes[inodeIndex].lastModified = null
             coreFileSystem.runSerializationAction {
                 it.position(offset).writeByte(byte)
+                it.position(blockGroup.freeInodesCountOffset).writeInt(blockGroup.freeInodesCount)
                 it.position(blockGroup.inodesOffset + inodeIndex * INode.sizeInBytes())
                 serializeToChannel(it, blockGroup.inodes[inodeIndex])
             }
@@ -135,6 +156,4 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
         freeInodesCounter.incrementAndGet()
         return Unit.right()
     }
-
-
 }

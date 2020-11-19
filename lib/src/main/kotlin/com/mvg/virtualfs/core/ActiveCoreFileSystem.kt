@@ -4,14 +4,13 @@ import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
 import com.mvg.virtualfs.Time
-import com.mvg.virtualfs.core.folders.ActiveFolderHandler
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.FolderEntry
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
 import java.nio.channels.SeekableByteChannel
 
 class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
-                           private val blockGroups: Array<FileSystemAllocator>,
+                           private val blockGroups: Array<AllocatingBlockGroup>,
                            private val serializer: FileSystemSerializer,
                            private val lockManager: LockManager<Int>,
                            override val time: Time) : CoreFileSystem {
@@ -25,36 +24,63 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         }
     }
 
-    private fun createRootFolder() : Either<CoreFileSystemError, FolderHandler>{
+    private fun createRootFolder() : Either<CoreFileSystemError, FolderHandler> {
+        return createItem("", ItemType.Folder,
+                {
+                    if(it.id != 0){
+                        CoreFileSystemError.FileSystemCorruptedError.left()
+                    }else {
+                        initFolder(it)
+                    }
+                },
+                { inode, descriptor -> ActiveFolderHandler(inode, this, descriptor)
+                }) as Either<CoreFileSystemError, FolderHandler>
+    }
+
+    private fun createFolder(name: String) : Either<CoreFileSystemError, FolderHandler>{
+        return createItem(name, ItemType.Folder,
+                { initFolder(it) },
+                { inode, descriptor -> ActiveFolderHandler(inode, this, descriptor)
+                }) as Either<CoreFileSystemError, FolderHandler>
+    }
+
+    private fun createFile(name: String) : Either<CoreFileSystemError, FileHandler>{
+        return createItem(name, ItemType.File,
+                { Unit.right() },
+                { inode, descriptor -> ActiveFileHandler(inode, this, descriptor)
+                }) as Either<CoreFileSystemError, FileHandler>
+    }
+
+    private fun createItem(
+            name: String,
+            itemType: ItemType,
+            initAction: (INodeAccessor) -> Either<CoreFileSystemError, Unit>,
+            factoryMethod: (INodeAccessor, descriptor: NamedItemDescriptor) -> ItemHandler)
+                : Either<CoreFileSystemError, ItemHandler>{
         //init
         val inode = when (val r = reserveInode()){
             is Either.Left -> return r
             is Either.Right -> r.b
         }
-        if(inode.id != 0){
-            freeInode(inode)
-            return Either.Left(CoreFileSystemError.FileSystemCorruptedError)
-        }
         val blockOffset = when(val r = reserveBlockAndGetOffset(inode.id)){
             is Either.Left -> { freeInode(inode); return r}
             is Either.Right -> r.b
         }
-        superGroup.decrementFreeInodeCount()
-        when(val r = initFolder(inode, blockOffset)){
+        when(val r = inode.addDataBlock(this, blockOffset)){
+            is Either.Left -> return r
+        }
+        when(val r = initAction(inode)){
             is Either.Left -> {
                 freeInode(inode)
                 freeBlock(blockOffset)
                 return r
             }
         }
-        return ActiveFolderHandler(inode, this, "").right()
+        return factoryMethod(inode, NamedItemDescriptor(inode.id, itemType, inode.attributeSet, name)).right()
     }
 
-    private fun initFolder(inode: INodeAccessor, offset: Long) : Either<CoreFileSystemError, INodeAccessor> {
+    private fun initFolder(inode: INodeAccessor) : Either<CoreFileSystemError, Unit> {
         inode.type = NodeType.Folder
-        when(val r = inode.addDataBlock(this, offset)){
-            is Either.Left -> return r
-        }
         val terminatingEntry = FolderEntry.TerminatingEntry
 
         val ch = inode.getSeekableByteChannel(this)
@@ -62,7 +88,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         serializer.runSerializationAction {
             inode.serialize(it)
         }
-        return Either.Right(inode)
+        return Unit.right()
     }
 
     override fun reserveBlockAndGetOffset(inodeId: Int): Either<CoreFileSystemError, Long> {
@@ -100,8 +126,8 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         }
 
         return when(entry.type){
-            ItemType.Folder -> ActiveFolderHandler(acc, this, "").right()
-            ItemType.File -> TODO("Create FileHandlers")
+            ItemType.Folder -> ActiveFolderHandler(acc, this, entry).right()
+            ItemType.File -> ActiveFileHandler(acc, this, entry).right()
         }
     }
 
@@ -111,7 +137,14 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         return bg.getInode(inodeId)
     }
 
-    override fun reserveInode(): Either<CoreFileSystemError, INodeAccessor> {
+    override fun createItemHandler(type: ItemType, name: String): Either<CoreFileSystemError, ItemHandler> {
+        return when(type){
+            ItemType.Folder -> createFolder(name)
+            ItemType.File -> createFile(name)
+        }
+    }
+
+    private fun reserveInode(): Either<CoreFileSystemError, INodeAccessor> {
         val lock = lockManager.createFreeLock()
         lock.lock()
         return when(val r = reserveAndGetItem(0, { it.reserveInode(this, lock) }, CoreFileSystemError.CantCreateMoreItemsError))
@@ -127,7 +160,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
 
     private fun <T> reserveAndGetItem(
             inodeId: Int,
-            blockGetter: (FileSystemAllocator) -> Either<CoreFileSystemError, T>,
+            blockGetter: (AllocatingBlockGroup) -> Either<CoreFileSystemError, T>,
             error: CoreFileSystemError): Either<CoreFileSystemError, T> {
         val firstIndex = getInodeBlockGroupIndex(inodeId)
         var blockGroup = blockGroups[firstIndex]
@@ -150,7 +183,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         return Either.Right(receivedItem)
     }
 
-    override fun freeInode(nodeAccessor: INodeAccessor): Either<CoreFileSystemError, Unit> {
+    private fun freeInode(nodeAccessor: INodeAccessor): Either<CoreFileSystemError, Unit> {
         val blockGroupIndex = getInodeBlockGroupIndex(nodeAccessor.id)
         when (val r = blockGroups[blockGroupIndex].markInodeFree(this, nodeAccessor))
         {

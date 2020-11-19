@@ -2,6 +2,7 @@ package com.mvg.virtualfs.core
 
 import arrow.core.Either
 import com.mvg.virtualfs.SystemTime
+import com.mvg.virtualfs.ViFileSystem
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.SuperGroup
 import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
@@ -16,7 +17,7 @@ fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemE
     val blockGroupSize = (sg.blockPerGroup * sg.blockSize).toLong()
 
     var offset = FIRST_BLOCK_OFFSET
-    val blockGroups = Array<FileSystemAllocator>(sg.totalBlockGroups){
+    val blockGroups = Array<AllocatingBlockGroup>(sg.totalBlockGroups){
         channel.position(offset)
         offset += blockGroupSize
         ActiveAllocatingBlockGroup(it, deserializeFromChannel(channel))

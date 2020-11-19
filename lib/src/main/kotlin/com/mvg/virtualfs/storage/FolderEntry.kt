@@ -12,5 +12,6 @@ data class FolderEntry(
 
     companion object {
         val TerminatingEntry = FolderEntry(0, NodeType.None, "")
+        val TerminatingEntrySize = 7
     }
 }

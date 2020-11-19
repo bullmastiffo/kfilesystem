@@ -1,17 +1,35 @@
 package com.mvg.virtualfs.storage
 
-import java.nio.ByteBuffer
-
+/**
+ *  Instantiates bit map with given byte array. Array is not copied!
+ * @property byteArray ByteArray
+ * @constructor
+ */
 class FixedBitMap(private val byteArray: ByteArray) {
 
+    /**
+     * Instantiates bit map with size to at least hold size bits
+     * (actual capacity can be larger, rounded to larger amount of bytes to hold all the bits.
+     * @param size Int
+     * @constructor
+     */
     constructor(size: Int) : this(ByteArray(ceilDivide(size, Byte.SIZE_BITS))){}
 
+    /**
+     * Gets given bit value
+     * @param n Int
+     * @return Boolean
+     */
     fun getBit(n: Int): Boolean
     {
         val (byteIndex, bitIndex) = checkAndGetIndexes(n)
         return (byteArray[byteIndex].toInt() and (1 shl bitIndex)) != 0
     }
 
+    /**
+     * Sets given bit to true / 1.
+     * @param n Int
+     */
     fun setBit(n: Int)
     {
         val (byteIndex, bitIndex) = checkAndGetIndexes(n)
@@ -21,6 +39,10 @@ class FixedBitMap(private val byteArray: ByteArray) {
         byteArray[byteIndex] = b.toByte()
     }
 
+    /**
+     * Flips bit at given index.
+     * @param n Int
+     */
     fun flipBit(n: Int)
     {
         val (byteIndex, bitIndex) = checkAndGetIndexes(n)
@@ -30,15 +52,24 @@ class FixedBitMap(private val byteArray: ByteArray) {
         byteArray[byteIndex] = b.toByte()
     }
 
+    /**
+     * Gets byte value for given bit and index of byte in the byte array.
+     * @param n Int
+     * @return Pair<Byte, Int>
+     */
     fun getHoldingByteAndIndex(n: Int): Pair<Byte, Int>
     {
         val (byteIndex, _) = checkAndGetIndexes(n)
         return Pair(byteArray[byteIndex], byteIndex)
     }
 
+    /**
+     * Returns next clear bit in bitmap or -1 if Bitmap is full.
+     * @return Int
+     */
     fun nextClearBit(): Int {
         var byteIndex = 0
-        while(byteArray[byteIndex] == FILLED_BYTE && byteIndex < byteArray.size) {
+        while(byteIndex < byteArray.size && byteArray[byteIndex] == FILLED_BYTE) {
             byteIndex++
         }
 
@@ -50,13 +81,17 @@ class FixedBitMap(private val byteArray: ByteArray) {
         while (b and (1 shl i) > 0){
             i++
         }
+        val clearIndex = byteIndex * Byte.SIZE_BITS + i
+        if(i >= Byte.SIZE_BITS){
+            return -1
+        }
 
-        return byteIndex * Byte.SIZE_BITS + i
+        return clearIndex
     }
 
     private fun checkAndGetIndexes(n: Int): Pair<Int, Int>
     {
-        val byteIndex = ceilDivide(n, Byte.SIZE_BITS)
+        val byteIndex = n / Byte.SIZE_BITS
         if(byteIndex >= byteArray.size){
             throw IndexOutOfBoundsException()
         }
@@ -64,8 +99,11 @@ class FixedBitMap(private val byteArray: ByteArray) {
         return Pair(byteIndex, bitIndex)
     }
 
+    /**
+     * Returns underlying byte array without copying
+     * @return ByteArray
+     */
     internal fun toByteArray(): ByteArray = byteArray
-    internal fun toByteBuffer(): ByteBuffer = ByteBuffer.wrap(byteArray)
 
     companion object{
         const val FILLED_BYTE: Byte = -1

@@ -10,6 +10,5 @@ interface CoreFileSystem : FileSystemSerializer, Closeable  {
     fun freeBlock(offset: Long): Either<CoreFileSystemError, Unit>
     fun initializeItemHandler(entry: NamedItemDescriptor): Either<CoreFileSystemError, ItemHandler>
     fun getInodeItemDescriptor(inodeId: Int): Either<CoreFileSystemError, ItemDescriptor>
-    fun reserveInode(): Either<CoreFileSystemError, INodeAccessor>
-    fun freeInode(nodeAccessor: INodeAccessor): Either<CoreFileSystemError, Unit>
+    fun createItemHandler(type: ItemType, name: String): Either<CoreFileSystemError, ItemHandler>
 }

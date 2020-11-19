@@ -11,8 +11,7 @@ interface AttributeSet {
 }
 
 interface ItemHandler : Closeable {
-    val name: String
-    val attributes: AttributeSet
+    val descriptor: NamedItemDescriptor
 }
 
 enum class ItemType{
@@ -42,12 +41,12 @@ data class ItemTemplate(val name: String, val type: ItemType){
 }
 
 interface FileHandler: ItemHandler{
-    val descriptor: NamedItemDescriptor
-    fun getStream() : SeekableByteChannel
+    val size: Long
+    fun getStream() : Either<CoreFileSystemError, SeekableByteChannel>
 }
 
 interface FolderHandler : ItemHandler {
     fun listItems(): Either<CoreFileSystemError, List<NamedItemDescriptor>>
     fun getItem(name: String): Either<CoreFileSystemError, ItemHandler>
-    fun createItem(item: ItemTemplate): ItemHandler
+    fun createItem(item: ItemTemplate): Either<CoreFileSystemError, ItemHandler>
 }
