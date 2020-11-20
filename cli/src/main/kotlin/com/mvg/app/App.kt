@@ -1,6 +1,7 @@
 package com.mvg.app
 
 import arrow.core.Either
+import arrow.core.Left
 import com.mvg.virtualfs.*
 import com.mvg.virtualfs.ViFileSystem
 import com.mvg.virtualfs.initializeViFilesystem
@@ -54,9 +55,27 @@ fun main(args: Array<String>) {
                     if (Files.exists(virtualFsPath)) {
                         Files.delete(virtualFsPath)
                     }
-                    var settins = ViFileSystemSettings(sz, blockSz)
-                    formatViFileSystem(virtualFsPath, settins)
+                    val settings = ViFileSystemSettings(sz, blockSz)
+                    formatViFileSystem(virtualFsPath, settings)
                     println("Formatted")
+                }
+                "resize" -> {
+                    if (cmd.size < 3) {
+                        println("too little parameters")
+                        continue
+                    }
+                    val sz = cmd[2].toLongOrNull() ?: 100L * (1L shl 20)
+                    val virtualFsPath = localFs.getPath(cmd[1])
+                    if (!Files.exists(virtualFsPath)) {
+                        println("file doesn't exist ${cmd[2]}")
+                        continue
+                    }
+                    Files.newByteChannel(virtualFsPath, StandardOpenOption.READ, StandardOpenOption.WRITE).use {
+                        when(val r = resizeViFilesystem(it, sz)){
+                            is Either.Left -> println("Error resizing: ${r.a}")
+                            is Either.Right -> println("Resized")
+                        }
+                    }
                 }
                 "ls" -> {
                     if (cmd.size < 2) {

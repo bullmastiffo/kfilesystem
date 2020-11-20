@@ -15,4 +15,10 @@ sealed class CoreFileSystemError {
     class UnderlyingIOExceptionError(val ex: IOException): CoreFileSystemError()
 
     class ItemNotFoundError(val fileName: String): CoreFileSystemError()
+    class UnsupportedResizeOperationError(val message: String): CoreFileSystemError(){
+        override fun toString(): String {
+            return "${super.toString()}. $message"
+        }
+    }
+
 }
