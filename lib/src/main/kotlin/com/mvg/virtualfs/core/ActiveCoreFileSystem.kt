@@ -3,6 +3,7 @@ package com.mvg.virtualfs.core
 import arrow.core.Either
 import arrow.core.left
 import arrow.core.right
+import com.mvg.virtualfs.FileSystemInfo
 import com.mvg.virtualfs.Time
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.FolderEntry
@@ -46,7 +47,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
 
     private fun createFile(name: String) : Either<CoreFileSystemError, FileHandler>{
         return createItem(name, ItemType.File,
-                { Unit.right() },
+                { it.type = NodeType.File; Unit.right() },
                 { inode, descriptor -> ActiveFileHandler(inode, this, descriptor)
                 }) as Either<CoreFileSystemError, FileHandler>
     }
@@ -90,6 +91,14 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         }
         return Unit.right()
     }
+
+    override val fileSystemInfo: FileSystemInfo
+        get() = FileSystemInfo(
+            superGroup.totalBlocks.toLong() * superGroup.blockSize,
+            superGroup.freeBlockCount.toLong() * superGroup.blockSize,
+                superGroup.freeInodeCount,
+                superGroup.freeBlockCount,
+                superGroup.blockSize)
 
     override fun reserveBlockAndGetOffset(inodeId: Int): Either<CoreFileSystemError, Long> {
         return when(val r = reserveAndGetItem(inodeId, { it.reserveBlockAndGetOffset(serializer) }, CoreFileSystemError.VolumeIsFullError))

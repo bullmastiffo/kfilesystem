@@ -7,6 +7,7 @@ import java.nio.channels.SeekableByteChannel
  * Provides FileSystem interface
  */
 interface FileSystem : Closeable {
+    val fileSystemInfo: FileSystemInfo
     /**
      * Creates a file in a given folder and returns @SeekableByteChannel to manipulate contents.
      * @param path String Containing folder

@@ -1,6 +1,7 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
+import com.mvg.virtualfs.FileSystemInfo
 import com.mvg.virtualfs.Time
 import java.io.Closeable
 
@@ -9,6 +10,11 @@ import java.io.Closeable
  * @property time Time
  */
 interface CoreFileSystem : FileSystemSerializer, Closeable  {
+    /**
+     * Returns basic file system information
+     */
+    val fileSystemInfo: FileSystemInfo
+
     /**
      * Time provider
      */

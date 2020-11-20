@@ -1,6 +1,7 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
+import com.mvg.virtualfs.massiveRun
 import com.mvg.virtualfs.storage.BlockGroup
 import io.mockk.*
 import org.junit.jupiter.api.Assertions.*
@@ -168,15 +169,7 @@ internal class ActiveAllocatingBlockGroupTest {
         assertEquals(freeInodeCount, blockGroup.freeInodesCount)
     }
 
-    private suspend fun massiveRun(times: Int, action: suspend (Int) -> Unit) {
-        coroutineScope {
-            repeat(times) {
-                launch {
-                    action(it)
-                }
-            }
-        }
-    }
+
 
     private fun buildActiveAllocatingBlockGroupForTest(): Pair<ActiveAllocatingBlockGroup, BlockGroup>
     {

@@ -2,7 +2,6 @@ package com.mvg.virtualfs
 
 import arrow.core.Either
 import com.mvg.virtualfs.core.*
-import java.io.Closeable
 import java.io.IOException
 import java.nio.channels.SeekableByteChannel
 import java.util.concurrent.atomic.AtomicBoolean
@@ -16,8 +15,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class ViFileSystem(
         private val rootFolder: FolderHandler,
-        private val token: Closeable) : FileSystem {
+        private val coreFileSystem: CoreFileSystem) : FileSystem {
     private val isClosed = AtomicBoolean(false)
+    override val fileSystemInfo: FileSystemInfo
+        get() = coreFileSystem.fileSystemInfo
 
     override fun createFile(path: String, name: String): SeekableByteChannel {
         val folder = navigateToFolder(path)
@@ -73,7 +74,7 @@ class ViFileSystem(
         if(isClosed.getAndSet(true))
             return
         rootFolder.close()
-        token.close()
+        coreFileSystem.close()
     }
 
     private fun navigateToFolder(path: String): FolderHandler {

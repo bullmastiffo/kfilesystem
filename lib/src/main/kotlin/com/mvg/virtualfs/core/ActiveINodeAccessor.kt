@@ -110,6 +110,7 @@ class ActiveINodeAccessor(
                     val indirectIndex = ob.getLong()
                     if(indirectIndex == 0L)
                         break
+                    doubleIndirectBlocks.add(indirectIndex)
                     readIndirectBlock(indirectIndex)
                 }
             }
@@ -124,7 +125,7 @@ class ActiveINodeAccessor(
         }
     }
 
-    fun getDataBlockAtOffset(
+    fun getOffsetAndSizeToReadFromFileOffset(
             coreFileSystem: CoreFileSystem,
             infileOffset: Long,
             forWrite: Boolean = false) : Pair<Long, Int> {
@@ -138,7 +139,7 @@ class ActiveINodeAccessor(
         val offsetInBlock = (infileOffset % blockSize).toInt()
 
         if(blockIndex >= maxBlocksCount){
-            TODO("Return either error")
+            throw IOException("Maximum file size reached ${maxBlocksCount*blockSize}. Can't add more blocks to inode.")
         }
 
         if (blockIndex >= totalFileBlocks && forWrite){
@@ -199,15 +200,17 @@ class ActiveINodeAccessor(
             {
                 return blockSize - offsetInBlock
             }
-            val dataInLastBlock  = (inode.dataSize % blockSize).toInt()
+            var dataInLastBlock  = (inode.dataSize % blockSize).toInt()
+            if(dataInLastBlock == 0)
+                dataInLastBlock = blockSize
             return dataInLastBlock - offsetInBlock
         }
 
         if(blockIndex < INDIRECT_INDEX){
-            return Pair(inode.blockOffsets[blockIndex], getRemainder())
+            return Pair(inode.blockOffsets[blockIndex] + offsetInBlock, getRemainder())
         }
         val indexInTail = blockIndex - INDIRECT_INDEX
-        return Pair(dataBlocks[indexInTail], getRemainder())
+        return Pair(dataBlocks[indexInTail] + offsetInBlock, getRemainder())
     }
 
     private fun truncateToSize(coreFileSystem: CoreFileSystem, newSize: Long) {
@@ -276,7 +279,7 @@ class ActiveINodeAccessor(
 
     private fun reserveDataBlock(coreFileSystem: CoreFileSystem): Long {
         val of = when (val r = coreFileSystem.reserveBlockAndGetOffset(inode.id)) {
-            is Either.Left -> TODO()
+            is Either.Left -> throw IOException("Error getting free block ${r.a}")
             is Either.Right -> r.b
         }
         return of
@@ -305,10 +308,9 @@ class ActiveINodeAccessor(
             var read = 0
             while(buffer.hasRemaining() && streamPosition < size())
             {
-                val (startBlockOffset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition)
+                val (offset, size) = this@ActiveINodeAccessor.getOffsetAndSizeToReadFromFileOffset(coreFileSystem, streamPosition)
                 val toRead = min(size, buffer.remaining())
                 val readBuffer = ByteBuffer.allocate(toRead)
-                val offset = startBlockOffset + streamPosition
                 coreFileSystem.runSerializationAction {
                     it.position(offset).read(readBuffer)
                 }
@@ -325,9 +327,8 @@ class ActiveINodeAccessor(
             var written = 0
             while(buffer.hasRemaining())
             {
-                val (startBlockoffset, size) = this@ActiveINodeAccessor.getDataBlockAtOffset(coreFileSystem, streamPosition, true)
+                val (offset, size) = this@ActiveINodeAccessor.getOffsetAndSizeToReadFromFileOffset(coreFileSystem, streamPosition, true)
                 val toWrite = min(size, buffer.remaining())
-                val offset = startBlockoffset + streamPosition
                 coreFileSystem.runSerializationAction {
                     it.position(offset).write( buffer.slice(buffer.position(), toWrite) )
                     streamPosition+=toWrite

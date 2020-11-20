@@ -5,6 +5,8 @@ import arrow.core.Left
 import com.mvg.virtualfs.*
 import com.mvg.virtualfs.ViFileSystem
 import com.mvg.virtualfs.initializeViFilesystem
+import java.io.IOException
+import java.nio.ByteBuffer
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption
@@ -89,7 +91,7 @@ fun main(args: Array<String>) {
                     val path = cmd[1]
                     println("$path folder contains:")
                     fs.getFolderItems(path).forEach {
-                        println("${it.name}\t\t${it.created}\t\t${it.lastModified}\t\t${it.type}")
+                        println("${it.name}\t\t${it.created}\t\t${it.lastModified}\t\t${it.type}\t{${it.size/1024}kb}")
                     }
                 }
                 "mkdir" -> {
@@ -118,6 +120,52 @@ fun main(args: Array<String>) {
                     val path = cmd[1]
                     fs.deleteItem(path)
                     println("deleted $path")
+                }
+                "cp2vs" -> {
+                    if (fs == null) {
+                        println("no file system")
+                        continue
+                    }
+                    if (cmd.size < 3) {
+                        println("too little parameters")
+                        continue
+                    }
+                    val pathVirtual = cmd[1]
+                    val pathReal = localFs.getPath(cmd[2])
+                    fs.createFile(pathVirtual, pathReal.fileName.toString()).use { dest ->
+                        val buffer = ByteBuffer.allocate(fs.fileSystemInfo.blockSize)
+                        Files.newByteChannel(pathReal, StandardOpenOption.READ, StandardOpenOption.WRITE).use { src ->
+                            while(src.read(buffer) > 0)
+                            {
+                                dest.write(buffer.flip())
+                                buffer.flip()
+                            }
+                        }
+                    }
+                    println("copied!")
+                }
+                "cp2real" -> {
+                    if (fs == null) {
+                        println("no file system")
+                        continue
+                    }
+                    if (cmd.size < 3) {
+                        println("too little parameters")
+                        continue
+                    }
+                    val pathVirtual = cmd[1]
+                    val pathReal = localFs.getPath(cmd[2])
+                    fs.openFile(pathVirtual).use { src ->
+                        val buffer = ByteBuffer.allocate(fs.fileSystemInfo.blockSize)
+                        Files.newByteChannel(pathReal, StandardOpenOption.CREATE_NEW, StandardOpenOption.READ, StandardOpenOption.WRITE).use { dest ->
+                            while(src.read(buffer) > 0)
+                            {
+                                dest.write(buffer.flip())
+                                buffer.flip()
+                            }
+                        }
+                    }
+                    println("copied!")
                 }
                 else ->{
                     println("unknown")
