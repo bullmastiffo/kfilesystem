@@ -1,13 +1,17 @@
-package com.mvg.virtualfs.core
+package com.mvg.virtualfs
 
 import arrow.core.Either
-import com.mvg.virtualfs.SystemTime
-import com.mvg.virtualfs.ViFileSystem
+import com.mvg.virtualfs.core.*
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.SuperGroup
 import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
 import java.nio.channels.SeekableByteChannel
 
+/**
+ * Initializes instance of @see ViFileSystem stored in given channel.
+ * @param channel SeekableByteChannel
+ * @return Either<CoreFileSystemError, ViFileSystem>
+ */
 fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemError, ViFileSystem>{
     if(channel.position() != 0L){
         channel.position(0L)
@@ -22,14 +26,13 @@ fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemE
         offset += blockGroupSize
         ActiveAllocatingBlockGroup(it, deserializeFromChannel(channel))
     }
-    var coreFs = ActiveCoreFileSystem(
+    val coreFs = ActiveCoreFileSystem(
             accessor,
             blockGroups,
             DuplexChannelFileSystemSerializer(channel),
-            PrimitiveLockManager<Int>(),
+            PrimitiveLockManager(),
             SystemTime)
-    var rootFolder = coreFs.getOrCreateRootFolder()
-    return when(rootFolder){
+    return when(val rootFolder = coreFs.getOrCreateRootFolder()){
         is Either.Left -> rootFolder
         is Either.Right -> Either.Right(ViFileSystem(rootFolder.b as FolderHandler, coreFs))
     }

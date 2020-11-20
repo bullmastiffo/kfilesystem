@@ -44,7 +44,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
             return CoreFileSystemError.VolumeIsFullError.left()
         }
         var blockIndex: Int
-        blocksLock.withLock { // TODO serialize count correctly
+        blocksLock.withLock {
             blockIndex = blockGroup.blockBitMap.nextClearBit()
             blockGroup.blockBitMap.flipBit(blockIndex)
             blockGroup.freeBlocksCount--
@@ -88,7 +88,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
                 blockGroup.blockSize,
                 inode,
                 blockGroup.inodesOffset + inodeIndex * INode.sizeInBytes(),
-                lock, ViFsAttributeSet(inode.created!!, inode.lastModified!!)).right()
+                lock, ViFsAttributeSet(inode)).right()
     }
 
     override fun getInode(inodeId: Int): Either<CoreFileSystemError, ItemDescriptor> {
@@ -103,7 +103,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
             NodeType.Folder -> ItemType.Folder
             NodeType.File -> ItemType.File
         }
-        return ItemDescriptor(inodeId, nodeType, ViFsAttributeSet(inode.created!!, inode.lastModified!!))
+        return ItemDescriptor(inodeId, nodeType, ViFsAttributeSet(inode))
                 .right()
     }
 
@@ -125,11 +125,14 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
             }
         }
         val now = coreFileSystem.time.now()
+        val inode = blockGroup.inodes[inodeIndex]
+        inode.created = now
+        inode.lastModified = now
         return ActiveINodeAccessor(
                 blockGroup.blockSize,
-                blockGroup.inodes[inodeIndex],
+                inode,
                 blockGroup.inodesOffset + inodeIndex * INode.sizeInBytes(),
-                lock, ViFsAttributeSet(now, now)).right()
+                lock, ViFsAttributeSet(inode)).right()
     }
 
     override fun markInodeFree(coreFileSystem: CoreFileSystem, inode: INodeAccessor): Either<CoreFileSystemError, Unit> {

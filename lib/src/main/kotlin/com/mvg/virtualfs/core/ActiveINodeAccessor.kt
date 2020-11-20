@@ -1,6 +1,7 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
+import arrow.core.left
 import arrow.core.right
 import com.mvg.virtualfs.storage.INode
 import com.mvg.virtualfs.storage.INode.Companion.OFFSETS_SIZE
@@ -15,6 +16,23 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
 import kotlin.math.*
 
+/**
+ * INodeAccessor implementation that manages data blocks and provides access to it's content as a channel.
+ * @property blockSize Int
+ * @property inode INode
+ * @property offsetInUnderlyingStream Long
+ * @property lock Lock
+ * @property viFsAttributeSet ViFsAttributeSet
+ * @property isOpen AtomicBoolean
+ * @property dataBlocks ArrayList<Long>
+ * @property doubleIndirectBlocks ArrayList<Long>
+ * @property maxBlocksCount Int
+ * @property id Int
+ * @property type NodeType
+ * @property attributeSet AttributeSet
+ * @property size Long
+ * @constructor
+ */
 class ActiveINodeAccessor(
         private val blockSize: Int,
         private val inode: INode,
@@ -36,25 +54,16 @@ class ActiveINodeAccessor(
     override val size: Long
         get() = inode.dataSize
 
-    override fun addDataBlock(coreFileSystem: CoreFileSystem, offset: Long): Either<CoreFileSystemError, Long> {
-        var foundIndex = 1
-        for (i in 0 until INDIRECT_INDEX){
-            if(inode.blockOffsets[i] == 0L)
+    override fun addInitialDataBlock(offset: Long): Either<CoreFileSystemError, Unit> {
+            if(inode.blockOffsets[0] != 0L)
             {
-                foundIndex = i
-                break
+                return CoreFileSystemError.FileSystemCorruptedError.left()
             }
-        }
-        if(foundIndex >= 0){
-            inode.blockOffsets[foundIndex]=offset
-            return offset.right()
-        }
-        TODO("Add indirect and double indirect blocks")
+        inode.blockOffsets[0] = offset
+        return Unit.right()
     }
 
     override fun serialize(channel: SeekableByteChannel) {
-        inode.created = viFsAttributeSet.created
-        inode.lastModified = viFsAttributeSet.lastModified
         channel.position(offsetInUnderlyingStream)
         serializeToChannel(channel, inode)
     }
@@ -263,6 +272,11 @@ class ActiveINodeAccessor(
         return of
     }
 
+    /**
+     * Implementation of @see SeekableByteChannel based on virtual fs inode
+     * @property coreFileSystem CoreFileSystem
+     * @constructor
+     */
     inner class SeekableByteChannelOnTopOfBlocks(
             private val coreFileSystem: CoreFileSystem) : SeekableByteChannel
     {
@@ -307,7 +321,7 @@ class ActiveINodeAccessor(
                 coreFileSystem.runSerializationAction {
                     it.position(offset).write( buffer.slice(buffer.position(), toWrite) )
                     streamPosition+=toWrite
-                    this@ActiveINodeAccessor.viFsAttributeSet.lastModifiedDate = coreFileSystem.time.now()
+                    this@ActiveINodeAccessor.inode.lastModified = coreFileSystem.time.now()
                     if(streamPosition > size()){
                         this@ActiveINodeAccessor.inode.dataSize = streamPosition
                     }
@@ -341,6 +355,10 @@ class ActiveINodeAccessor(
             return this
         }
 
+    }
+
+    protected fun finalize() {
+        close()
     }
 
     companion object {

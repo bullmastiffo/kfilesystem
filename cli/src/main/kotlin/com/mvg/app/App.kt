@@ -3,7 +3,7 @@ package com.mvg.app
 import arrow.core.Either
 import com.mvg.virtualfs.*
 import com.mvg.virtualfs.ViFileSystem
-import com.mvg.virtualfs.core.initializeViFilesystem
+import com.mvg.virtualfs.initializeViFilesystem
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.StandardOpenOption
@@ -11,7 +11,7 @@ import java.nio.file.StandardOpenOption
 fun main(args: Array<String>) {
     val localFs = FileSystems.getDefault()
 
-    println("Hello to virtual fs!\nmount <fileName>\tmount")
+    println("Hello to virtual fs!\nmount <fileName>\tmount\nquit\nformat x x <fileName>\tFormat ~100Mb partition with 1kb block")
     var fs: ViFileSystem? = null
     while (true)
     {
@@ -69,7 +69,7 @@ fun main(args: Array<String>) {
                     }
                     val path = cmd[1]
                     println("$path folder contains:")
-                    fs.getFiles(path).forEach {
+                    fs.getFolderItems(path).forEach {
                         println("${it.name}\t\t${it.created}\t\t${it.lastModified}\t\t${it.type}")
                     }
                 }

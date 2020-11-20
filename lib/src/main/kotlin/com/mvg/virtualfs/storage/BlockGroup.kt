@@ -3,6 +3,25 @@ package com.mvg.virtualfs.storage
 import com.mvg.virtualfs.core.NodeType
 import com.mvg.virtualfs.storage.serialization.OutputChannelSerializable
 
+/**
+ * Represents descriptor of block group in virtual filesystem
+ * @property blockSize Int File system block size
+ * @property numberOfBlocks Int Total number of data blocks in block group
+ * @property numberOfInodes Int Total number of inodes in block group
+ * @property freeBlocksCount Int Number of free data blocks in block group
+ * @property freeInodesCount Int Number of free inodes in block group
+ * @property dataBlocksOffset Long Offset of first data block in containing channel
+ * @property blockBitMap FixedBitMap Bit map of occupied data blocks
+ * @property inodesBitMap FixedBitMap Bit map of occupied inodes
+ * @property inodes Array<INode> Inodes descriptors arrays.
+ * @property startBlockOffset Long Start offset of this block group in containing channel
+ * @property freeBlocksCountOffset Long Offset of free blocks counter in containing channel
+ * @property freeInodesCountOffset Long Offset of free inodes counter in containing channel
+ * @property bitmapBlocksOffset Long Offset of block bitmap in containing channel
+ * @property bitmapInodesOffset Long Offset of inodes bitmap in containing channel
+ * @property inodesOffset Long Offset of inodes array in containing channel
+ * @constructor
+ */
 @OutputChannelSerializable(with = BlockGroupSerializer::class)
 class BlockGroup (
         val blockSize: Int,

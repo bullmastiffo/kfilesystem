@@ -1,13 +1,15 @@
 package com.mvg.virtualfs.core
 
+import com.mvg.virtualfs.storage.INode
 import java.util.*
 
-class ViFsAttributeSet(private val _created: Date, _lastModified: Date): AttributeSet {
+class ViFsAttributeSet(private val inode: INode): AttributeSet {
 
-    var lastModifiedDate = _lastModified
+    override val size: Long
+        get() = inode.dataSize
 
     override val created: Date
-        get() = _created
+        get() = inode.created!!
     override val lastModified: Date
-        get() = lastModifiedDate
+        get() = inode.lastModified!!
 }

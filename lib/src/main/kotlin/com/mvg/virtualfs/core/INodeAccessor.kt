@@ -16,12 +16,11 @@ interface INodeAccessor : Closeable {
     val size: Long
 
     /**
-     * Adds data block to given inode. Returns added offset value on success.
-     * @param coreFileSystem CoreFileSystem
+     * Adds initial data block offset to given inode.
      * @param offset Long
-     * @return Either<CoreFileSystemError, Long>
+     * @return Either<CoreFileSystemError, Unit>
      */
-    fun addDataBlock(coreFileSystem: CoreFileSystem, offset: Long) : Either<CoreFileSystemError, Long>
+    fun addInitialDataBlock(offset: Long) : Either<CoreFileSystemError, Unit>
 
     /**
      * Serializes inode to channel at current position.

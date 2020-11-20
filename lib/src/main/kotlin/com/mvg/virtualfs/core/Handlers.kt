@@ -6,6 +6,7 @@ import java.nio.channels.SeekableByteChannel
 import java.util.*
 
 interface AttributeSet {
+    val size: Long
     val created: Date
     val lastModified: Date
 }

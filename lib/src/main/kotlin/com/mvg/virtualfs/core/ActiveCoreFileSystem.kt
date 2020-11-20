@@ -66,7 +66,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
             is Either.Left -> { freeInode(inode); return r}
             is Either.Right -> r.b
         }
-        when(val r = inode.addDataBlock(this, blockOffset)){
+        when(val r = inode.addInitialDataBlock(blockOffset)){
             is Either.Left -> return r
         }
         when(val r = initAction(inode)){
@@ -198,8 +198,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
     }
 
     override fun close() {
-        // TODO("Not yet implemented")
-        // release all handlers forcefully
+        // TODO release all handlers forcefully
         serializer.close()
     }
 
