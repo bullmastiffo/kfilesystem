@@ -18,7 +18,7 @@ fun main(args: Array<String>) {
         val cmd = readLine()?.split(' ') ?: break
         try {
             when (cmd[0]) {
-                "quit" -> break
+                "quit","exit" -> break
                 "mount" -> {
                     if (cmd.size < 2) {
                         println("too little parameters")
@@ -86,6 +86,19 @@ fun main(args: Array<String>) {
                     val name = cmd[2]
                     val fi = fs.createFolder(path, name)
                     println("created ${fi.name}")
+                }
+                "rm" -> {
+                    if (fs == null) {
+                        println("no file system")
+                        continue
+                    }
+                    if (cmd.size < 2) {
+                        println("too little parameters")
+                        continue
+                    }
+                    val path = cmd[1]
+                    fs.deleteItem(path)
+                    println("deleted $path")
                 }
                 else ->{
                     println("unknown")

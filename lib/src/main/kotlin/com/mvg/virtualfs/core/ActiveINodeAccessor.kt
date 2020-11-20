@@ -63,6 +63,16 @@ class ActiveINodeAccessor(
         return Unit.right()
     }
 
+    override fun removeInitialDataBlock(): Either<CoreFileSystemError, Long> {
+        if(inode.blockOffsets[0] == 0L)
+        {
+            return CoreFileSystemError.FileSystemCorruptedError.left()
+        }
+        val offset = inode.blockOffsets[0]
+        inode.blockOffsets[0] = 0
+        return offset.right()
+    }
+
     override fun serialize(channel: SeekableByteChannel) {
         channel.position(offsetInUnderlyingStream)
         serializeToChannel(channel, inode)

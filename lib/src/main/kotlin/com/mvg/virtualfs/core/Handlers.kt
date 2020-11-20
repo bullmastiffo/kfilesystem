@@ -43,11 +43,12 @@ data class ItemTemplate(val name: String, val type: ItemType){
 
 interface FileHandler: ItemHandler{
     val size: Long
-    fun getStream() : Either<CoreFileSystemError, SeekableByteChannel>
+    fun getByteChannel() : Either<CoreFileSystemError, SeekableByteChannel>
 }
 
 interface FolderHandler : ItemHandler {
     fun listItems(): Either<CoreFileSystemError, List<NamedItemDescriptor>>
     fun getItem(name: String): Either<CoreFileSystemError, ItemHandler>
     fun createItem(item: ItemTemplate): Either<CoreFileSystemError, ItemHandler>
+    fun deleteItem(name: String): Either<CoreFileSystemError, Unit>
 }

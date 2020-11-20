@@ -113,15 +113,8 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
     }
 
     override fun initializeItemHandler(entry: NamedItemDescriptor): Either<CoreFileSystemError, ItemHandler> {
-        val blockGroupIndex = getInodeBlockGroupIndex(entry.nodeId)
-        val itemLock = lockManager.getLockForItem(entry.nodeId)
-
-        if(!itemLock.tryLock())
-        {
-            return CoreFileSystemError.ItemAlreadyOpenedError.left()
-        }
-        val acc = when(val r = blockGroups[blockGroupIndex].acquireInode(entry.nodeId, itemLock)){
-            is Either.Left -> {itemLock.unlock(); return r}
+        val acc = when(val r = getLockedInodeAccessor(entry.nodeId)){
+            is Either.Left -> return r
             is Either.Right -> r.b
         }
 
@@ -137,11 +130,29 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         return bg.getInode(inodeId)
     }
 
-    override fun createItemHandler(type: ItemType, name: String): Either<CoreFileSystemError, ItemHandler> {
+    override fun createItem(type: ItemType, name: String): Either<CoreFileSystemError, ItemHandler> {
         return when(type){
             ItemType.Folder -> createFolder(name)
             ItemType.File -> createFile(name)
         }
+    }
+
+    override fun deleteItem(descriptor: ItemDescriptor): Either<CoreFileSystemError, Unit> {
+        val nodeAccessor = when(val r = getLockedInodeAccessor(descriptor.nodeId)){
+            is Either.Left -> return r
+            is Either.Right -> r.b
+        }
+        if (descriptor.type == ItemType.Folder
+                && nodeAccessor.attributeSet.size > FolderEntry.TerminatingEntrySize){
+            return CoreFileSystemError.CantDeleteNonEmptyFolderError.left()
+        }
+        nodeAccessor.getSeekableByteChannel(this).truncate(0L)
+        val offset = when(val r = nodeAccessor.removeInitialDataBlock()){
+            is Either.Left -> return r
+            is Either.Right -> r.b
+        }
+        freeBlock(offset)
+        return freeInode(nodeAccessor)
     }
 
     private fun reserveInode(): Either<CoreFileSystemError, INodeAccessor> {
@@ -193,12 +204,29 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         return Either.Right(Unit)
     }
 
+    private fun getLockedInodeAccessor(nodeId: Int) : Either<CoreFileSystemError, INodeAccessor>{
+        val blockGroupIndex = getInodeBlockGroupIndex(nodeId)
+        val itemLock = lockManager.getLockForItem(nodeId)
+
+        if(!itemLock.tryLock())
+        {
+            return CoreFileSystemError.ItemAlreadyOpenedError.left()
+        }
+
+        return when(val r =blockGroups[blockGroupIndex].acquireInode(nodeId, itemLock))
+        {
+            is Either.Left -> {itemLock.unlock(); return r}
+            is Either.Right -> r.b.right()
+        }
+    }
+
     override fun runSerializationAction(action: (SeekableByteChannel) -> Unit) {
         serializer.runSerializationAction(action)
     }
 
     override fun close() {
         // TODO release all handlers forcefully
+        serializer.runSerializationAction { superGroup.serialize(it) }
         serializer.close()
     }
 

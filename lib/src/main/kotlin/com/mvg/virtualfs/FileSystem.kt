@@ -23,10 +23,10 @@ interface FileSystem : Closeable {
     fun openFile(filePath: String): SeekableByteChannel
 
     /**
-     * Deletes given file.
-     * @param name String
+     * Deletes given item (File or Folder). Folder must be empty to delete.
+     * @param itemPath String
      */
-    fun deleteFile(name: String)
+    fun deleteItem(itemPath: String)
 
     /**
      * Gets list of items containing in a folder.
@@ -42,11 +42,5 @@ interface FileSystem : Closeable {
      * @return FileInfo
      */
     fun createFolder(path: String, name: String) : FileInfo
-
-    /**
-     * Deletes a folder at given full path.
-     * @param path String
-     */
-    fun deleteFolder(path: String)
 }
 

@@ -10,6 +10,7 @@ sealed class CoreFileSystemError {
     object ItemAlreadyOpenedError: CoreFileSystemError()
     object InvalidItemNameError: CoreFileSystemError()
     object ItemWithSameNameAlreadyExistsError: CoreFileSystemError()
+    object CantDeleteNonEmptyFolderError: CoreFileSystemError()
 
     class UnderlyingIOExceptionError(val ex: IOException): CoreFileSystemError()
 

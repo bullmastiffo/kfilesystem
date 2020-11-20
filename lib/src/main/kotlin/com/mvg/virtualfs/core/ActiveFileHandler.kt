@@ -15,7 +15,7 @@ class ActiveFileHandler(
     override val size: Long
         get() = inodeAccessor.size
 
-    override fun getStream(): Either<CoreFileSystemError, SeekableByteChannel> {
+    override fun getByteChannel(): Either<CoreFileSystemError, SeekableByteChannel> {
         if (isClosed.get()){
             return CoreFileSystemError.ItemClosedError.left()
         }

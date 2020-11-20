@@ -69,7 +69,7 @@ class ActiveFolderHandler(
             {
                 return CoreFileSystemError.ItemWithSameNameAlreadyExistsError.left()
             }
-            var h = when (val r = coreFileSystem.createItemHandler(item.type, item.name))
+            var h = when (val r = coreFileSystem.createItem(item.type, item.name))
             {
                 is Either.Left -> return r
                 is Either.Right -> r.b
@@ -82,6 +82,33 @@ class ActiveFolderHandler(
             lastEntryOffset = ch.position()
             serializeToChannel(ch, FolderEntry.TerminatingEntry)
             return h.right()
+        }
+    }
+
+    override fun deleteItem(name: String): Either<CoreFileSystemError, Unit> {
+        when(val r = ensureFolderRead()){
+            is Either.Left -> return r
+        }
+        lock.write {
+            if(!itemsMap!!.containsKey(name))
+            {
+                return CoreFileSystemError.ItemNotFoundError(name).left()
+            }
+            val item = itemsMap!![name]!!
+            when (val r = coreFileSystem.deleteItem(item))
+            {
+                is Either.Left -> return r
+            }
+            itemsMap!!.remove(name)
+            val ch = inodeAccessor.getSeekableByteChannel(coreFileSystem)
+            ch.position(0)
+            itemsMap!!.forEach {
+                serializeToChannel(ch, FolderEntry(it.value.nodeId, it.value.type.toNodeType, it.value.name))
+            }
+            lastEntryOffset = ch.position()
+            serializeToChannel(ch, FolderEntry.TerminatingEntry)
+            ch.truncate(ch.position())
+            return Unit.right()
         }
     }
 

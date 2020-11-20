@@ -1,5 +1,7 @@
 package com.mvg.virtualfs.core
 
+import java.nio.channels.SeekableByteChannel
+
 interface SuperGroupAccessor {
     val blockSize: Int
     val totalBlocks: Int
@@ -15,4 +17,6 @@ interface SuperGroupAccessor {
 
     fun incrementFreeInodeCount()
     fun decrementFreeInodeCount()
+
+    fun serialize(channel: SeekableByteChannel)
 }

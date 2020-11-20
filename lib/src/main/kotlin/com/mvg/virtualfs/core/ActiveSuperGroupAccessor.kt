@@ -1,6 +1,8 @@
 package com.mvg.virtualfs.core
 
 import com.mvg.virtualfs.storage.SuperGroup
+import com.mvg.virtualfs.storage.serialization.serializeToChannel
+import java.nio.channels.SeekableByteChannel
 import java.util.concurrent.atomic.AtomicInteger
 
 class ActiveSuperGroupAccessor(private val superGroup: SuperGroup) : SuperGroupAccessor
@@ -41,4 +43,10 @@ class ActiveSuperGroupAccessor(private val superGroup: SuperGroup) : SuperGroupA
         activeFreeInodesCount.decrementAndGet()
     }
 
+    override fun serialize(channel: SeekableByteChannel) {
+        channel.position(0)
+        superGroup.freeBlockCount = activeFreeBlockCount.get()
+        superGroup.freeInodeCount = activeFreeInodesCount.get()
+        serializeToChannel(channel, superGroup)
+    }
 }

@@ -26,32 +26,27 @@ class ViFileSystem(
                 "Error opening item $path/$name: %s")
         closeNonRootFolder(folder)
         if(item is FileHandler){
-            return unwrapOrThrow( { item.getStream()}, "Error opening file $name stream %s" )
+            return unwrapOrThrow( { item.getByteChannel()}, "Error opening file $name stream %s" )
         }
 
         throw IOException("$name is not a file")
     }
 
     override fun openFile(filePath: String): SeekableByteChannel {
-        val lastPart = filePath.lastIndexOf(PATH_DELIMITER)
-        if(lastPart == -1 || lastPart == filePath.length - 1)
-        {
-            throw IOException("$filePath is not a valid file path")
-        }
-        val path = filePath.substring(0, lastPart)
-        val name = filePath.substring(lastPart + 1)
-        val folder = navigateToFolder(path)
+        val (name, folder) = getItemNameAndContainingFolder(filePath)
         val item = unwrapOrThrow({ folder.getItem(name) }, "Error opening item $filePath: %s")
         closeNonRootFolder(folder)
         if(item is FileHandler){
-            return unwrapOrThrow( { item.getStream()}, "Error opening file $filePath stream %s" )
+            return unwrapOrThrow( { item.getByteChannel()}, "Error opening file $filePath stream %s" )
         }
 
         throw IOException("$filePath is not a file")
     }
 
-    override fun deleteFile(name: String) {
-        TODO("Not yet implemented")
+    override fun deleteItem(itemPath: String) {
+        val (name, folder) = getItemNameAndContainingFolder(itemPath)
+        unwrapOrThrow({ folder.deleteItem(name) }, "Error deleting item $itemPath: %s")
+        closeNonRootFolder(folder)
     }
 
     override fun getFolderItems(path: String): Iterable<FileInfo> {
@@ -66,16 +61,12 @@ class ViFileSystem(
             FileInfo(it.name, it.type, it.attributeSet.size, it.attributeSet.created, it.attributeSet.lastModified)
 
     override fun createFolder(path: String, name: String): FileInfo {
-        var folder = navigateToFolder(path)
+        val folder = navigateToFolder(path)
         unwrapOrThrow( { folder.createItem(ItemTemplate(name, ItemType.Folder)) }, "Error creating folder %s")
             .use {
                 closeNonRootFolder(folder)
                 return mapToFileInfo(it.descriptor)
             }
-    }
-
-    override fun deleteFolder(path: String) {
-        TODO("Not yet implemented")
     }
 
     override fun close() {
@@ -108,6 +99,17 @@ class ViFileSystem(
     private fun closeNonRootFolder(folder: FolderHandler) {
         if (folder != rootFolder)
             folder.close()
+    }
+
+    private fun getItemNameAndContainingFolder(filePath: String): Pair<String, FolderHandler> {
+        val lastPart = filePath.lastIndexOf(PATH_DELIMITER)
+        if (lastPart == -1 || lastPart == filePath.length - 1) {
+            throw IOException("$filePath is not a valid file path")
+        }
+        val path = filePath.substring(0, lastPart + 1)
+        val name = filePath.substring(lastPart + 1)
+        val folder = navigateToFolder(path)
+        return Pair(name, folder)
     }
 
     private fun<T> unwrapOrThrow(action:()-> Either<CoreFileSystemError, T>, errorTemplate: String): T

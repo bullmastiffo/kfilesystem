@@ -23,6 +23,12 @@ interface INodeAccessor : Closeable {
     fun addInitialDataBlock(offset: Long) : Either<CoreFileSystemError, Unit>
 
     /**
+     * Removes initial data block offset from given inode and returns its offset.
+     * @return Either<CoreFileSystemError, Long>
+     */
+    fun removeInitialDataBlock() : Either<CoreFileSystemError, Long>
+
+    /**
      * Serializes inode to channel at current position.
      * @param channel DuplexChannel
      */
