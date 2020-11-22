@@ -5,9 +5,8 @@ plugins {
 
 repositories {
     mavenCentral()
-    maven {
-        url = uri("https://dl.bintray.com/arrow-kt/arrow-kt/")
-    }
+    maven(url = "https://dl.bintray.com/arrow-kt/arrow-kt/")
+    jcenter()
 }
 
 val arrow_version = "0.11.0"

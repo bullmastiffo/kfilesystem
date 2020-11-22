@@ -1,9 +1,11 @@
 plugins {
     `kotlin-dsl`
+    id("org.jetbrains.dokka") version "1.4.10.2"
 }
 
 repositories {
     mavenCentral()
+    jcenter()
 }
 
 dependencies {
