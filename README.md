@@ -34,11 +34,13 @@ Maximum number of files is Int.MaxValue (2^31 - 1), but depends on actual file s
 |---|---|---|---|---|
 |1024 bytes| M data blocks|M data blocks|...|M data blocks|
 
-Super group (class `SuperGroup`) contains general information about file system, like total size, number of data blocks, inodes etc.
+Super group (class `SuperGroup` [here](https://github.com/bullmastiffo/kfilesystem/blob/master/lib/src/main/kotlin/com/mvg/virtualfs/storage/SuperGroup.kt)) contains general information about file system, like total size, number of data blocks, inodes etc.
 
-As mentioned earlier size of each block group (class `BlockGroup`) is  M = 8 * `block size in bytes` data blocks.
+As mentioned earlier size of each block group (class `BlockGroup` [here](https://github.com/bullmastiffo/kfilesystem/blob/master/lib/src/main/kotlin/com/mvg/virtualfs/storage/BlockGroup.kt)) is  M = 8 * `block size in bytes` data blocks.
 
 #### inode structure
+
+Defined [here](https://github.com/bullmastiffo/kfilesystem/blob/master/lib/src/main/kotlin/com/mvg/virtualfs/storage/INode.kt)
 
 |Field|Type|Description|
 |---|---|---|
@@ -67,8 +69,8 @@ Settings parameter defines object with file system total size and block size.
 formatViFileSystem(virtualFsPath, settings)
 ```
 
-Now it's possible to create an instance of `ViFileSystem` implementing `FileSystem` interface.
-Providing instance of `java.nio.channels.SeekableByteChannel`.
+Now it's possible to create an instance of `ViFileSystem` implementing `FileSystem` interface (see [here](https://github.com/bullmastiffo/kfilesystem/blob/master/lib/src/main/kotlin/com/mvg/virtualfs/FileSystem.kt)).
+Providing instance of `java.nio.channels.SeekableByteChannel` as a single parameter. Channel must be open for READ and WRITE.
 
 `ViFileSystem` implements `java.io.Closeable` and will close provided channel on call to `close`.
 
@@ -86,7 +88,7 @@ that will have fewer blocks then regular block groups.
 ### Resizing
 
 You can upsize existing kfs filesystem without loosing content.
-Providing instance of `java.nio.channels.SeekableByteChannel` and new total size in bytes.
+Providing instance of `java.nio.channels.SeekableByteChannel` and new total size in bytes as parameters.
 
 Limitation of current implementation is minimum expansion step is block group size (8 * `block size in bytes`).
 
@@ -96,7 +98,7 @@ resizeViFilesystem(channel, newSize)
 
 ## Generating documentation
 
-For generating documentation just use dokka task
+For generating documentation use dokka task.
 
 ```bash
 gradle dokkaGfm
