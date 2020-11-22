@@ -4,6 +4,10 @@ KFileSystem aka __kfs__ is a virtual file system, residing in single file writte
 File system structure is inspired by ext2/4fs filesystems family.
 Consider this project a hackathon project as it was completed in short time, and it's author's first project for JVM in Kotlin.
 
+lib folder contains all the code for file system itself.
+cli folder contains primitive cli app to play around with virtual file system,
+format, resize, copy between your OS file system and the virtual one.
+
 ## Filesystem structure and layout
 
 Single unit of allocating virtual disk space is block.
