@@ -10,7 +10,7 @@ import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
-private val ItemType.toNodeType: NodeType
+internal val ItemType.toNodeType: NodeType
     get() {
         return when(this){
             ItemType.File -> NodeType.File

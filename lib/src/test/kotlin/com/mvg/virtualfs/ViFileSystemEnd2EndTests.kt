@@ -2,26 +2,44 @@ package com.mvg.virtualfs
 
 import arrow.core.Either
 import com.mvg.virtualfs.core.ActiveINodeAccessor
+import com.mvg.virtualfs.core.AlwaysReadFromChannelFolderItemsStrategy
+import com.mvg.virtualfs.core.InMemoryFolderItemsStrategy
 import com.mvg.virtualfs.storage.ceilDivide
 import kotlinx.coroutines.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.channels.SeekableByteChannel
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 
-internal class ViFileSystemEnd2EndTests {
+internal class TestWithAlwaysReadFromChannelFolderItemsStrategy : ViFileSystemEnd2EndTests() {
+    private val alwaysReadInstance = AlwaysReadFromChannelFolderItemsStrategy()
+    override fun getViFileSystem(ch: SeekableByteChannel) =
+            initializeViFilesystem(ch) { alwaysReadInstance }.fold(
+                    { throw IOException("Filesystem not created: $it") },
+                    { it })
+}
+
+internal class TestWithInMemoryFolderItemsStrategy : ViFileSystemEnd2EndTests() {
+    override fun getViFileSystem(ch: SeekableByteChannel) =
+            initializeViFilesystem(ch) { InMemoryFolderItemsStrategy() }.fold(
+                    { throw IOException("Filesystem not created: $it") },
+                    { it })
+}
+
+internal abstract class ViFileSystemEnd2EndTests {
     @Test
     fun `Test can create file with maximum size and then free space`(){
         val blockSize = BlockSize.Block1Kb.size
         val testFileSystemPath = createFileSystemInTempFile(BlockSize.Block1Kb)
         val testFileName = "someFile.bin"
         Files.newByteChannel(testFileSystemPath, StandardOpenOption.READ, StandardOpenOption.WRITE).use { ch ->
-            val fsResult = initializeViFilesystem(ch) as? Either.Right
-            assert(fsResult != null)
-            val fs = fsResult!!.b
+            val fs = getViFileSystem(ch)
             val info = fs.fileSystemInfo
             val maxFileSize = blockSize * (ActiveINodeAccessor.INDIRECT_INDEX + (blockSize / 8)*(1 + blockSize / 8))
             val blocksToWriteSize = blockSize * 2
@@ -56,10 +74,7 @@ internal class ViFileSystemEnd2EndTests {
         val testFileSystemPath = createFileSystemInTempFile(BlockSize.Block2Kb)
         val testFileName = "someFile%s.bin"
         Files.newByteChannel(testFileSystemPath, StandardOpenOption.READ, StandardOpenOption.WRITE).use { ch ->
-            val fsResult = initializeViFilesystem(ch) as? Either.Right
-            assert(fsResult != null)
-            val fs = fsResult!!.b
-
+            val fs = getViFileSystem(ch)
             val coroutinesCount = 10
             val fileSize = blockSize * (ActiveINodeAccessor.INDIRECT_INDEX + (blockSize / 8))
             val writtenSizes = IntArray(coroutinesCount)
@@ -108,9 +123,7 @@ internal class ViFileSystemEnd2EndTests {
         val testFileSystemPath = createFileSystemInTempFile(BlockSize.Block2Kb)
         val testFileName = "someFile%s.bin"
         Files.newByteChannel(testFileSystemPath, StandardOpenOption.READ, StandardOpenOption.WRITE).use { ch ->
-            val fsResult = initializeViFilesystem(ch) as? Either.Right
-            assert(fsResult != null)
-            val fs = fsResult!!.b
+            val fs = getViFileSystem(ch)
             fs.createFolder("/", "f0")
             fs.createFolder("/f0", "f1")
             fs.createFolder("/f0/f1", "f2")
@@ -130,6 +143,30 @@ internal class ViFileSystemEnd2EndTests {
             }
         }
     }
+
+    @Test
+    fun `Test can create and remove folders`(){
+        val testFileSystemPath = createFileSystemInTempFile(BlockSize.Block1Kb)
+        Files.newByteChannel(testFileSystemPath, StandardOpenOption.READ, StandardOpenOption.WRITE).use { ch ->
+            val fs = getViFileSystem(ch)
+
+            val info = fs.fileSystemInfo
+            fs.createFolder("/", "f0")
+            val numberOfFolders = 10
+            for (i in 0 until numberOfFolders){
+                fs.createFolder("/f0", "sub$i")
+            }
+            assertEquals(info.freeInodes - numberOfFolders - 1, fs.fileSystemInfo.freeInodes)
+            assertThrows<IOException> { fs.deleteItem("/f0") }
+            for (i in 0 until numberOfFolders){
+                fs.deleteItem("/f0/sub$i")
+            }
+            fs.deleteItem("/f0")
+            assertEquals(info, fs.fileSystemInfo)
+        }
+    }
+
+    protected abstract fun getViFileSystem(ch: SeekableByteChannel): ViFileSystem
 
     private fun createFileSystemInTempFile(blockSize: BlockSize): Path {
         val file = createTempFile()
