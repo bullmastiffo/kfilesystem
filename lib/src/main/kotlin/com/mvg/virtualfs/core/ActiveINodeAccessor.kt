@@ -23,7 +23,6 @@ import kotlin.math.*
  * @property offsetInUnderlyingStream Long
  * @property lock Lock
  * @property viFsAttributeSet ViFsAttributeSet
- * @property isOpen AtomicBoolean
  * @property dataBlocks ArrayList<Long>
  * @property doubleIndirectBlocks ArrayList<Long>
  * @property maxBlocksCount Int
@@ -37,9 +36,7 @@ class ActiveINodeAccessor(
         private val blockSize: Int,
         private val inode: INode,
         private val offsetInUnderlyingStream: Long,
-        private val lock: Lock,
         private val viFsAttributeSet: ViFsAttributeSet) : INodeAccessor {
-    private val isOpen = AtomicBoolean(true)
     private val dataBlocks = ArrayList<Long>()
     private val doubleIndirectBlocks = ArrayList<Long>()
     private val maxBlocksCount = INDIRECT_INDEX + blockSize / Long.SIZE_BYTES + (blockSize / Long.SIZE_BYTES) * (blockSize / Long.SIZE_BYTES)
@@ -78,7 +75,7 @@ class ActiveINodeAccessor(
         serializeToChannel(channel, inode)
     }
 
-    override fun getSeekableByteChannel(coreFileSystem: CoreFileSystem): SeekableByteChannel {
+    override fun getSeekableByteChannel(coreFileSystem: CoreFileSystem, acquiredLock: Lock): SeekableByteChannel {
         val totalFileBlocks = ceilDivide(inode.dataSize.toInt(), blockSize)
 
         if(totalFileBlocks > INDIRECT_INDEX){
@@ -86,7 +83,7 @@ class ActiveINodeAccessor(
             var blockCounter = INDIRECT_INDEX
 
             fun readIndirectBlock(position: Long) {
-                var ob = ByteBuffer.allocate(blockSize)
+                val ob = ByteBuffer.allocate(blockSize)
                 coreFileSystem.runSerializationAction {
                     it.position(position)
                             .read(ob)
@@ -100,7 +97,7 @@ class ActiveINodeAccessor(
             readIndirectBlock(indirectPosition)
             if(blockCounter < totalFileBlocks){
                 val doubleIndirectPosition = inode.blockOffsets[DOUBLE_INDIRECT_INDEX]
-                var ob = ByteBuffer.allocate(blockSize)
+                val ob = ByteBuffer.allocate(blockSize)
                 coreFileSystem.runSerializationAction {
                     it.position(doubleIndirectPosition)
                             .read(ob)
@@ -116,13 +113,7 @@ class ActiveINodeAccessor(
             }
         }
 
-        return SeekableByteChannelOnTopOfBlocks(coreFileSystem)
-    }
-
-    override fun close() {
-        if(isOpen.getAndSet(false)) {
-            lock.unlock()
-        }
+        return SeekableByteChannelOnTopOfBlocks(coreFileSystem, acquiredLock)
     }
 
     fun getOffsetAndSizeToReadFromFileOffset(
@@ -228,7 +219,7 @@ class ActiveINodeAccessor(
                 }
             }
 
-            var blockToRelease = 0L
+            var blockToRelease: Long
             when {
                 block < INDIRECT_INDEX -> {
                     blockToRelease = inode.blockOffsets[block]
@@ -291,17 +282,25 @@ class ActiveINodeAccessor(
      * @constructor
      */
     inner class SeekableByteChannelOnTopOfBlocks(
-            private val coreFileSystem: CoreFileSystem) : SeekableByteChannel
+            private val coreFileSystem: CoreFileSystem,
+            private val lock: Lock) : SeekableByteChannel
     {
+        private val isOpen = AtomicBoolean(true)
         private var streamPosition = 0L
 
         override fun close() {
-            this@ActiveINodeAccessor.close()
+            if(isOpen.getAndSet(false)) {
+                lock.unlock()
+            }
         }
 
-        override fun isOpen(): Boolean = this@ActiveINodeAccessor.isOpen.get()
+        override fun isOpen(): Boolean = isOpen.get()
 
         override fun read(buffer: ByteBuffer?): Int {
+            if(!isOpen()) {
+                throw IOException("Can't read from closed channel")
+            }
+
             if(buffer == null)
                 throw IllegalArgumentException("buffer must not be null")
 
@@ -322,6 +321,10 @@ class ActiveINodeAccessor(
         }
 
         override fun write(buffer: ByteBuffer?): Int {
+            if(!isOpen()) {
+                throw IOException("Can't read from closed channel")
+            }
+
             if(buffer == null)
                 throw IllegalArgumentException("buffer must not be null")
             var written = 0
@@ -347,6 +350,10 @@ class ActiveINodeAccessor(
         override fun position(): Long = streamPosition
 
         override fun position(newPosition: Long): SeekableByteChannel {
+            if(!isOpen()) {
+                throw IOException("Can't read from closed channel")
+            }
+
             streamPosition = newPosition
             return this
         }
@@ -354,6 +361,10 @@ class ActiveINodeAccessor(
         override fun size(): Long = this@ActiveINodeAccessor.inode.dataSize
 
         override fun truncate(newSize: Long): SeekableByteChannel {
+            if(!isOpen()) {
+                throw IOException("Can't read from closed channel")
+            }
+
             if (newSize < 0)
                 throw IOException("newSize must be not less then 0")
             if(newSize >= size())
@@ -362,14 +373,12 @@ class ActiveINodeAccessor(
                 streamPosition = newSize
 
             this@ActiveINodeAccessor.truncateToSize(coreFileSystem, newSize)
-
             return this
         }
 
-    }
-
-    protected fun finalize() {
-        close()
+        protected fun finalize() {
+            close()
+        }
     }
 
     companion object {

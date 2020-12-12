@@ -58,7 +58,7 @@ interface CoreFileSystem : FileSystemSerializer, Closeable  {
 
     /**
      * Deletes existing item, freeing all allocated resources (inode and data blocks)
-     * @param descriptor ItemDescriptor
+     * @param inodeAccessor INodeAccessor
      */
-    fun deleteItem(descriptor: ItemDescriptor) : Either<CoreFileSystemError, Unit>
+    fun deleteItem(inodeAccessor: INodeAccessor) : Either<CoreFileSystemError, Unit>
 }

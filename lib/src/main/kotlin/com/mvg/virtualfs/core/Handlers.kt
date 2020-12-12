@@ -13,6 +13,7 @@ interface AttributeSet {
 
 interface ItemHandler : Closeable {
     val descriptor: NamedItemDescriptor
+    fun delete(): Either<CoreFileSystemError, Unit>
 }
 
 enum class ItemType{

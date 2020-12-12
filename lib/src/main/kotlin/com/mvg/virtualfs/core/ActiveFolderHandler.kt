@@ -1,6 +1,8 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
+import arrow.core.extensions.either.foldable.foldLeft
+import arrow.core.flatMap
 import arrow.core.left
 import arrow.core.right
 import com.mvg.virtualfs.ViFileSystem
@@ -69,19 +71,16 @@ class ActiveFolderHandler(
             {
                 return CoreFileSystemError.ItemWithSameNameAlreadyExistsError.left()
             }
-            var h = when (val r = coreFileSystem.createItem(item.type, item.name))
-            {
-                is Either.Left -> return r
-                is Either.Right -> r.b
+            return coreFileSystem.createItem(item.type, item.name).flatMap { h ->
+                itemsMap!![item.name] = h.descriptor
+                val entry = FolderEntry(h.descriptor.nodeId, h.descriptor.type.toNodeType, h.descriptor.name)
+                val ch = inodeAccessor.getSeekableByteChannel(coreFileSystem, lock.writeLock())
+                ch.position(lastEntryOffset)
+                serializeToChannel(ch, entry)
+                lastEntryOffset = ch.position()
+                serializeToChannel(ch, FolderEntry.TerminatingEntry)
+                h.right()
             }
-            itemsMap!![item.name] = h.descriptor
-            val entry = FolderEntry(h.descriptor.nodeId, h.descriptor.type.toNodeType, h.descriptor.name)
-            val ch = inodeAccessor.getSeekableByteChannel(coreFileSystem)
-            ch.position(lastEntryOffset)
-            serializeToChannel(ch, entry)
-            lastEntryOffset = ch.position()
-            serializeToChannel(ch, FolderEntry.TerminatingEntry)
-            return h.right()
         }
     }
 
@@ -95,12 +94,13 @@ class ActiveFolderHandler(
                 return CoreFileSystemError.ItemNotFoundError(name).left()
             }
             val item = itemsMap!![name]!!
-            when (val r = coreFileSystem.deleteItem(item))
-            {
-                is Either.Left -> return r
-            }
+
+            coreFileSystem.initializeItemHandler(item).flatMap {
+                it.delete()
+            }.mapLeft { return it.left() }
+
             itemsMap!!.remove(name)
-            val ch = inodeAccessor.getSeekableByteChannel(coreFileSystem)
+            val ch = inodeAccessor.getSeekableByteChannel(coreFileSystem, lock.writeLock())
             ch.position(0)
             itemsMap!!.forEach {
                 serializeToChannel(ch, FolderEntry(it.value.nodeId, it.value.type.toNodeType, it.value.name))
@@ -112,10 +112,23 @@ class ActiveFolderHandler(
         }
     }
 
-    override fun close() {
-        if(!isClosed.getAndSet(true)) {
-            inodeAccessor.close()
+    override fun delete(): Either<CoreFileSystemError, Unit> {
+        if (isClosed.get()){
+            return CoreFileSystemError.ItemClosedError.left()
         }
+        if (inodeAccessor.attributeSet.size > FolderEntry.TerminatingEntrySize){
+            return CoreFileSystemError.CantDeleteNonEmptyFolderError.left()
+        }
+        val writeLock = lock.writeLock()
+        if (!writeLock.tryLock()){
+            return CoreFileSystemError.ItemAlreadyOpenedError.left()
+        }
+        inodeAccessor.getSeekableByteChannel(coreFileSystem, writeLock).truncate(0L)
+        return coreFileSystem.deleteItem(inodeAccessor)
+    }
+
+    override fun close() {
+        isClosed.set(true)
     }
 
     private fun ensureFolderRead() : Either<CoreFileSystemError, Unit> {
@@ -132,7 +145,7 @@ class ActiveFolderHandler(
             }
 
             val map = LinkedHashMap<String, NamedItemDescriptor>()
-            val channel = inodeAccessor.getSeekableByteChannel(coreFileSystem)
+            val channel = inodeAccessor.getSeekableByteChannel(coreFileSystem, initLock)
             do {
                 val entry = deserializeFromChannel<FolderEntry>(channel)
                 if(entry == FolderEntry.TerminatingEntry){

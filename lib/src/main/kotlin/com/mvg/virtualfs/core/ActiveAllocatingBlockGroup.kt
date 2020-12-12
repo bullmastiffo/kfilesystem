@@ -8,7 +8,6 @@ import com.mvg.virtualfs.storage.INode
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
 import com.mvg.virtualfs.storage.*
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -77,7 +76,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
     override val freeInodes: Int
         get() = freeInodesCounter.get()
 
-    override fun acquireInode(inodeId: Int, lock: Lock): Either<CoreFileSystemError, INodeAccessor> {
+    override fun acquireInode(inodeId: Int): Either<CoreFileSystemError, INodeAccessor> {
         val inodeIndex = inodeId - blockGroup.inodes[0].id
         if (inodeIndex !in blockGroup.inodes.indices)
         {
@@ -88,7 +87,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
                 blockGroup.blockSize,
                 inode,
                 blockGroup.inodesOffset + inodeIndex * INode.sizeInBytes(),
-                lock, ViFsAttributeSet(inode)).right()
+                ViFsAttributeSet(inode)).right()
     }
 
     override fun getInode(inodeId: Int): Either<CoreFileSystemError, ItemDescriptor> {
@@ -107,7 +106,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
                 .right()
     }
 
-    override fun reserveInode(coreFileSystem: CoreFileSystem, lock: Lock): Either<CoreFileSystemError, INodeAccessor> {
+    override fun reserveInode(coreFileSystem: CoreFileSystem): Either<CoreFileSystemError, INodeAccessor> {
         if(freeInodesCounter.getAndDecrement() <= 0){
             freeInodesCounter.incrementAndGet()
             return CoreFileSystemError.CantCreateMoreItemsError.left()
@@ -132,7 +131,7 @@ class ActiveAllocatingBlockGroup(private val groupId: Int, private val blockGrou
                 blockGroup.blockSize,
                 inode,
                 blockGroup.inodesOffset + inodeIndex * INode.sizeInBytes(),
-                lock, ViFsAttributeSet(inode)).right()
+                ViFsAttributeSet(inode)).right()
     }
 
     override fun markInodeFree(coreFileSystem: CoreFileSystem, inode: INodeAccessor): Either<CoreFileSystemError, Unit> {
