@@ -3,10 +3,7 @@ package com.mvg.virtualfs
 import arrow.core.Either
 import com.mvg.virtualfs.core.ActiveINodeAccessor
 import com.mvg.virtualfs.storage.ceilDivide
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import java.nio.ByteBuffer
@@ -101,6 +98,34 @@ internal class ViFileSystemEnd2EndTests {
                         }while(read > 0)
                         assertEquals(writtenSizes[i], readTotal)
                     }
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `Test can work with folders in parallel`() = runBlocking {
+        val testFileSystemPath = createFileSystemInTempFile(BlockSize.Block2Kb)
+        val testFileName = "someFile%s.bin"
+        Files.newByteChannel(testFileSystemPath, StandardOpenOption.READ, StandardOpenOption.WRITE).use { ch ->
+            val fsResult = initializeViFilesystem(ch) as? Either.Right
+            assert(fsResult != null)
+            val fs = fsResult!!.b
+            fs.createFolder("/", "f0")
+            fs.createFolder("/f0", "f1")
+            fs.createFolder("/f0/f1", "f2")
+            fs.createFolder("/f0/f1/f2", "f3")
+            val folderMap = hashMapOf(0 to "/f0", 1 to "/f0/f1", 2 to "/f0/f1/f2", 3 to "/f0/f1/f2/f3")
+
+            val coroutinesCount = 40
+
+            withContext(Dispatchers.Default) {
+                massiveRun(coroutinesCount) {i ->
+                    delay(10)
+                    fs.createFile( folderMap[i % 4]!!, String.format(testFileName, i)).use {
+                    }
+                    delay(10)
+                    fs.deleteItem(folderMap[i % 4]!! + "/" + String.format(testFileName, i))
                 }
             }
         }

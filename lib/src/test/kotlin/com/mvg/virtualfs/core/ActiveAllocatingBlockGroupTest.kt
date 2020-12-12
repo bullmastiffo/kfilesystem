@@ -108,12 +108,11 @@ internal class ActiveAllocatingBlockGroupTest {
         val coreFileSystem = mockk<CoreFileSystem>(relaxed = true)
         val dt = Date(2020)
         every { coreFileSystem.time.now() } returns dt
-        val lockMock = spyk<Lock>()
         val results = Array<Either<CoreFileSystemError, INodeAccessor>?>(coroutinesCount) { null }
 
         withContext(Dispatchers.Default) {
             massiveRun(coroutinesCount) {
-                results[it] = sut.reserveInode(coreFileSystem, lockMock)
+                results[it] = sut.reserveInode(coreFileSystem)
             }
         }
 
@@ -134,17 +133,16 @@ internal class ActiveAllocatingBlockGroupTest {
         val coreFileSystem = mockk<CoreFileSystem>(relaxed = true)
         val dt = Date(2020)
         every { coreFileSystem.time.now() } returns dt
-        val lockMock = spyk<Lock>()
 
        for(i in 0 until freeInodeCount) {
-           val result =  sut.reserveInode(coreFileSystem, lockMock)
+           val result =  sut.reserveInode(coreFileSystem)
            assert(result is Either.Right)
            val inodeAccessor = (result as Either.Right).b
            assertEquals(i + firstNodeIndex, inodeAccessor.id)
            assertEquals(dt, inodeAccessor.attributeSet.created)
            assertEquals(dt, inodeAccessor.attributeSet.lastModified)
        }
-        val result =  sut.reserveInode(coreFileSystem, lockMock)
+        val result =  sut.reserveInode(coreFileSystem)
         assert(result is Either.Left)
     }
 
@@ -155,9 +153,8 @@ internal class ActiveAllocatingBlockGroupTest {
         val coreFileSystem = mockk<CoreFileSystem>(relaxed = true)
         val dt = Date(2020)
         every { coreFileSystem.time.now() } returns dt
-        val lockMock = spyk<Lock>()
         val inodes = Array(freeInodeCount){
-            (sut.reserveInode(coreFileSystem, lockMock) as Either.Right).b
+            (sut.reserveInode(coreFileSystem) as Either.Right).b
         }
 
         for (i in 0 until freeInodeCount) {

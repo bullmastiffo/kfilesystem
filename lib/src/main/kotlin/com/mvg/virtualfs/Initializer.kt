@@ -1,6 +1,8 @@
 package com.mvg.virtualfs
 
 import arrow.core.Either
+import arrow.core.flatMap
+import arrow.core.right
 import com.mvg.virtualfs.core.*
 import com.mvg.virtualfs.storage.FIRST_BLOCK_OFFSET
 import com.mvg.virtualfs.storage.SuperGroup
@@ -30,11 +32,8 @@ fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemE
             accessor,
             blockGroups,
             DuplexChannelFileSystemSerializer(channel),
-            PrimitiveLockManager(),
+            ReferenceCountingConcurrentPool(ItemHandlerProxyFactory()),
             SystemTime)
-    return when(val rootFolder = coreFs.getOrCreateRootFolder()){
-        is Either.Left -> rootFolder
-        is Either.Right -> Either.Right(ViFileSystem(rootFolder.b as FolderHandler, coreFs))
-    }
+    return coreFs.getOrCreateRootFolder().flatMap { ViFileSystem(it, coreFs).right() }
 }
 

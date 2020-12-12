@@ -3,13 +3,14 @@ package com.mvg.virtualfs.core
 import arrow.core.Either
 import java.io.Closeable
 import java.nio.channels.SeekableByteChannel
+import java.util.concurrent.locks.Lock
 
 /**
  * Provides instruments to work with inode instance
  * @property id Int Identifier of current inode
  * @property type NodeType Node type of current inode
  */
-interface INodeAccessor : Closeable {
+interface INodeAccessor {
     val id: Int
     var type: NodeType
     val attributeSet: AttributeSet
@@ -36,7 +37,9 @@ interface INodeAccessor : Closeable {
 
     /**
      * Gets input channel over the data in associated data blocks
-     * @return Either<CoreFileSystemError, DuplexChannel>
+     * @param coreFileSystem CoreFileSystem
+     * @param acquiredLock Lock already acquired to work with stream, will be released on channel Close
+     * @return SeekableByteChannel
      */
-    fun getSeekableByteChannel(coreFileSystem: CoreFileSystem): SeekableByteChannel
+    fun getSeekableByteChannel(coreFileSystem: CoreFileSystem, acquiredLock: Lock): SeekableByteChannel
 }

@@ -1,7 +1,6 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
-import java.util.concurrent.locks.Lock
 
 /**
  * Represents instance of allocating block group, that allocates blocks and inodes.
@@ -44,10 +43,9 @@ interface InodeAllocator{
     /**
      * Acquires already reserved node for access.
      * @param inodeId Int
-     * @param lock Lock
      * @return Either<CoreFileSystemError, INodeAccessor>
      */
-    fun acquireInode(inodeId: Int, lock: Lock): Either<CoreFileSystemError, INodeAccessor>
+    fun acquireInode(inodeId: Int): Either<CoreFileSystemError, INodeAccessor>
 
     /**
      * Gets metadata of reserved inode without getting access.
@@ -59,10 +57,9 @@ interface InodeAllocator{
     /**
      * Reserves free inode in the group and returns accessor.
      * @param coreFileSystem CoreFileSystem
-     * @param lock Lock
      * @return Either<CoreFileSystemError, INodeAccessor>
      */
-    fun reserveInode(coreFileSystem: CoreFileSystem, lock: Lock): Either<CoreFileSystemError, INodeAccessor>
+    fun reserveInode(coreFileSystem: CoreFileSystem): Either<CoreFileSystemError, INodeAccessor>
 
     /**
      * Marks previously reserved Inode as free.
