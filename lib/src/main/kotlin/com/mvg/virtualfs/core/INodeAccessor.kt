@@ -38,8 +38,8 @@ interface INodeAccessor {
     /**
      * Gets input channel over the data in associated data blocks
      * @param coreFileSystem CoreFileSystem
-     * @param acquiredLock Lock already acquired to work with stream, will be released on channel Close
+     * @param closeAction Action to run on channel Close
      * @return SeekableByteChannel
      */
-    fun getSeekableByteChannel(coreFileSystem: CoreFileSystem, acquiredLock: Lock): SeekableByteChannel
+    fun getSeekableByteChannel(coreFileSystem: CoreFileSystem, closeAction:() -> Unit = { }): SeekableByteChannel
 }

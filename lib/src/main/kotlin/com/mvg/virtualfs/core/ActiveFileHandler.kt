@@ -27,7 +27,7 @@ class ActiveFileHandler(
         if(!lock.tryLock()){
             return CoreFileSystemError.ItemAlreadyOpenedError.left()
         }
-        channel = inodeAccessor.getSeekableByteChannel(coreFileSystem, lock)
+        channel = inodeAccessor.getSeekableByteChannel(coreFileSystem) { lock.unlock() }
         return channel!!.right()
     }
 

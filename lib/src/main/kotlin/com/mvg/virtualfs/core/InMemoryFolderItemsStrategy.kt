@@ -1,7 +1,6 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
-import arrow.core.flatMap
 import arrow.core.left
 import arrow.core.right
 import com.mvg.virtualfs.storage.FolderEntry
@@ -25,7 +24,7 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
     @Volatile
     private var itemsMap: LinkedHashMap<String, NamedItemDescriptor>? = null
     private var lastEntryOffset: Long = 0L
-    override fun containsItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor, lock: Lock)
+    override fun containsItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor)
             : Either<CoreFileSystemError, Boolean> {
         ensureFolderRead(cfs, accessor).mapLeft {
             return it.left()
@@ -47,7 +46,7 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
         }
     }
 
-    override fun getItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor, lock: Lock)
+    override fun getItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor)
             : Either<CoreFileSystemError, NamedItemDescriptor> {
         ensureFolderRead(cfs, accessor).mapLeft {
             return it.left()
@@ -59,7 +58,7 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
         return CoreFileSystemError.ItemNotFoundError(name).left()
     }
 
-    override fun addItem(descriptor: NamedItemDescriptor, cfs: CoreFileSystem, accessor: INodeAccessor, lock: Lock)
+    override fun addItem(descriptor: NamedItemDescriptor, cfs: CoreFileSystem, accessor: INodeAccessor)
             : Either<CoreFileSystemError, NamedItemDescriptor> {
         ensureFolderRead(cfs, accessor).mapLeft {
             return it.left()
@@ -67,29 +66,31 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
 
         itemsMap!![descriptor.name] = descriptor
         val entry = FolderEntry(descriptor.nodeId, descriptor.type.toNodeType, descriptor.name)
-        val ch = accessor.getSeekableByteChannel(cfs, lock)
-        ch.position(lastEntryOffset)
-        serializeToChannel(ch, entry)
-        lastEntryOffset = ch.position()
-        serializeToChannel(ch, FolderEntry.TerminatingEntry)
+        accessor.getSeekableByteChannel(cfs).use { ch ->
+            ch.position(lastEntryOffset)
+            serializeToChannel(ch, entry)
+            lastEntryOffset = ch.position()
+            serializeToChannel(ch, FolderEntry.TerminatingEntry)
+        }
         return descriptor.right()
     }
 
-    override fun deleteItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor, lock: Lock)
+    override fun deleteItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor)
         : Either<CoreFileSystemError, Unit> {
         ensureFolderRead(cfs, accessor).mapLeft {
             return it.left()
         }
 
         itemsMap!!.remove(name)
-        val ch = accessor.getSeekableByteChannel(cfs, lock)
-        ch.position(0)
-        itemsMap!!.forEach {
-            serializeToChannel(ch, FolderEntry(it.value.nodeId, it.value.type.toNodeType, it.value.name))
+        accessor.getSeekableByteChannel(cfs).use { ch ->
+            ch.position(0)
+            itemsMap!!.forEach {
+                serializeToChannel(ch, FolderEntry(it.value.nodeId, it.value.type.toNodeType, it.value.name))
+            }
+            lastEntryOffset = ch.position()
+            serializeToChannel(ch, FolderEntry.TerminatingEntry)
+            ch.truncate(ch.position())
         }
-        lastEntryOffset = ch.position()
-        serializeToChannel(ch, FolderEntry.TerminatingEntry)
-        ch.truncate(ch.position())
         return Unit.right()
     }
 
@@ -104,19 +105,19 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
             }
 
             val map = LinkedHashMap<String, NamedItemDescriptor>()
-            val channel = inodeAccessor.getSeekableByteChannel(coreFileSystem, initLock)
-            do {
-                val entry = deserializeFromChannel<FolderEntry>(channel)
-                if(entry == FolderEntry.TerminatingEntry){
-                    lastEntryOffset = channel.position() - FolderEntry.TerminatingEntrySize
-                    break
-                }
-                map[entry.name] = when(val r = coreFileSystem.getInodeItemDescriptor(entry.inodeId))
-                {
-                    is Either.Right -> NamedItemDescriptor(entry.name, r.b)
-                    is Either.Left -> return r
-                }
-            } while (true)
+            inodeAccessor.getSeekableByteChannel(coreFileSystem).use { channel ->
+                do {
+                    val entry = deserializeFromChannel<FolderEntry>(channel)
+                    if (entry == FolderEntry.TerminatingEntry) {
+                        lastEntryOffset = channel.position() - FolderEntry.TerminatingEntrySize
+                        break
+                    }
+                    coreFileSystem.getInodeItemDescriptor(entry.inodeId).fold(
+                            { return it.left() },
+                            { map[entry.name] = NamedItemDescriptor(entry.name, it) }
+                    )
+                } while (true)
+            }
 
             itemsMap = map
         }

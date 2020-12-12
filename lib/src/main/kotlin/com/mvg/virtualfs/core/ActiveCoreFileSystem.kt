@@ -85,14 +85,12 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
     private fun initFolder(inode: INodeAccessor) : Either<CoreFileSystemError, Unit> {
         inode.type = NodeType.Folder
         val terminatingEntry = FolderEntry.TerminatingEntry
-        val l = ReentrantLock()
-        l.lock()
-        val ch = inode.getSeekableByteChannel(this, l)
-        serializeToChannel(ch, terminatingEntry)
-        serializer.runSerializationAction {
-            inode.serialize(it)
+        inode.getSeekableByteChannel(this).use { ch ->
+            serializeToChannel(ch, terminatingEntry)
+            serializer.runSerializationAction {
+                inode.serialize(it)
+            }
         }
-        ch.close()
         return Unit.right()
     }
 

@@ -13,7 +13,6 @@ import java.lang.IllegalArgumentException
 import java.nio.ByteBuffer
 import java.nio.channels.SeekableByteChannel
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.Lock
 import kotlin.math.*
 
 /**
@@ -74,7 +73,7 @@ class ActiveINodeAccessor(
         serializeToChannel(channel, inode)
     }
 
-    override fun getSeekableByteChannel(coreFileSystem: CoreFileSystem, acquiredLock: Lock): SeekableByteChannel {
+    override fun getSeekableByteChannel(coreFileSystem: CoreFileSystem, closeAction:() -> Unit): SeekableByteChannel {
         val totalFileBlocks = ceilDivide(inode.dataSize.toInt(), blockSize)
 
         if(totalFileBlocks > INDIRECT_INDEX){
@@ -112,7 +111,7 @@ class ActiveINodeAccessor(
             }
         }
 
-        return SeekableByteChannelOnTopOfBlocks(coreFileSystem, acquiredLock)
+        return SeekableByteChannelOnTopOfBlocks(coreFileSystem, closeAction)
     }
 
     fun getOffsetAndSizeToReadFromFileOffset(
@@ -282,14 +281,14 @@ class ActiveINodeAccessor(
      */
     inner class SeekableByteChannelOnTopOfBlocks(
             private val coreFileSystem: CoreFileSystem,
-            private val lock: Lock) : SeekableByteChannel
+            private val closeAction:() -> Unit) : SeekableByteChannel
     {
         private val isOpen = AtomicBoolean(true)
         private var streamPosition = 0L
 
         override fun close() {
             if(isOpen.getAndSet(false)) {
-                lock.unlock()
+                closeAction()
             }
         }
 

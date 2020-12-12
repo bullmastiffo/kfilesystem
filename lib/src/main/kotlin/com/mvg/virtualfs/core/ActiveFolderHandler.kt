@@ -25,8 +25,9 @@ class ActiveFolderHandler(
             return it.left()
         }
 
-        lock.readLock().lock()
-        return folderItemsStrategy.listItems(coreFileSystem, inodeAccessor, lock.readLock())
+        val readLock = lock.readLock()
+        readLock.lock()
+        return folderItemsStrategy.listItems(coreFileSystem, inodeAccessor, readLock)
     }
 
     override fun getItem(name: String): Either<CoreFileSystemError, ItemHandler> {
@@ -34,7 +35,7 @@ class ActiveFolderHandler(
             return it.left()
         }
         lock.read {
-            return folderItemsStrategy.getItem(name, coreFileSystem, inodeAccessor, lock.readLock()).flatMap {
+            return folderItemsStrategy.getItem(name, coreFileSystem, inodeAccessor).flatMap {
                 coreFileSystem.initializeItemHandler(it)
             }
         }
@@ -47,7 +48,7 @@ class ActiveFolderHandler(
             return it.left()
         }
         lock.write {
-            folderItemsStrategy.containsItem(item.name, coreFileSystem, inodeAccessor, lock.writeLock())
+            folderItemsStrategy.containsItem(item.name, coreFileSystem, inodeAccessor)
                     .fold( {return it.left() } ){
                         if(it)
                         {
@@ -55,7 +56,7 @@ class ActiveFolderHandler(
                         }
                     }
             return coreFileSystem.createItem(item.type, item.name).flatMap { h ->
-                folderItemsStrategy.addItem(h.descriptor, coreFileSystem, inodeAccessor, lock.writeLock()).mapLeft {
+                folderItemsStrategy.addItem(h.descriptor, coreFileSystem, inodeAccessor).mapLeft {
                     return it.left()
                 }
                 h.right()
@@ -68,12 +69,12 @@ class ActiveFolderHandler(
             return it.left()
         }
         lock.write {
-            return folderItemsStrategy.getItem(name, coreFileSystem, inodeAccessor, lock.writeLock())
+            return folderItemsStrategy.getItem(name, coreFileSystem, inodeAccessor)
                 .flatMap { item ->
                     coreFileSystem.initializeItemHandler(item).flatMap {
                         it.delete()
                     }.mapLeft { return it.left() }
-                    return folderItemsStrategy.deleteItem(name, coreFileSystem, inodeAccessor, lock.writeLock())
+                    return folderItemsStrategy.deleteItem(name, coreFileSystem, inodeAccessor)
                 }
         }
     }
@@ -89,7 +90,9 @@ class ActiveFolderHandler(
         if (!writeLock.tryLock()){
             return CoreFileSystemError.ItemAlreadyOpenedError.left()
         }
-        inodeAccessor.getSeekableByteChannel(coreFileSystem, writeLock).truncate(0L)
+        inodeAccessor.getSeekableByteChannel(coreFileSystem).use{
+            it.truncate(0L)
+        }
         return coreFileSystem.deleteItem(inodeAccessor)
     }
 
