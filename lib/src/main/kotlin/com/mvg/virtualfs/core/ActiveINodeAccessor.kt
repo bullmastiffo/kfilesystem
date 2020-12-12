@@ -21,7 +21,6 @@ import kotlin.math.*
  * @property blockSize Int
  * @property inode INode
  * @property offsetInUnderlyingStream Long
- * @property lock Lock
  * @property viFsAttributeSet ViFsAttributeSet
  * @property dataBlocks ArrayList<Long>
  * @property doubleIndirectBlocks ArrayList<Long>
@@ -322,7 +321,7 @@ class ActiveINodeAccessor(
 
         override fun write(buffer: ByteBuffer?): Int {
             if(!isOpen()) {
-                throw IOException("Can't read from closed channel")
+                throw IOException("Can't write to closed channel")
             }
 
             if(buffer == null)
@@ -347,22 +346,24 @@ class ActiveINodeAccessor(
             return written
         }
 
-        override fun position(): Long = streamPosition
+        override fun position(): Long = if (isOpen()) { streamPosition } else { throw IOException("Channel is closed") }
 
         override fun position(newPosition: Long): SeekableByteChannel {
             if(!isOpen()) {
-                throw IOException("Can't read from closed channel")
+                throw IOException("Channel is closed")
             }
 
             streamPosition = newPosition
             return this
         }
 
-        override fun size(): Long = this@ActiveINodeAccessor.inode.dataSize
+        override fun size(): Long = if (isOpen()) { this@ActiveINodeAccessor.inode.dataSize } else {
+            throw IOException("Channel is closed")
+        }
 
         override fun truncate(newSize: Long): SeekableByteChannel {
             if(!isOpen()) {
-                throw IOException("Can't read from closed channel")
+                throw IOException("Channel is closed")
             }
 
             if (newSize < 0)
