@@ -1,120 +1,86 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
-import arrow.core.extensions.either.foldable.foldLeft
 import arrow.core.flatMap
 import arrow.core.left
 import arrow.core.right
 import com.mvg.virtualfs.ViFileSystem
 import com.mvg.virtualfs.storage.FolderEntry
-import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
-import com.mvg.virtualfs.storage.serialization.serializeToChannel
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
-import kotlin.concurrent.withLock
 import kotlin.concurrent.write
-
-private val ItemType.toNodeType: NodeType
-    get() {
-        return when(this){
-            ItemType.File -> NodeType.File
-            ItemType.Folder -> NodeType.Folder
-        }
-    }
 
 class ActiveFolderHandler(
         private val inodeAccessor: INodeAccessor,
         private val coreFileSystem: CoreFileSystem,
+        private val folderItemsStrategy: FolderItemsStrategy,
         override val descriptor: NamedItemDescriptor) : FolderHandler {
     private var isClosed = AtomicBoolean(false)
-    private val initLock = ReentrantLock()
 
-    @Volatile
-    private var itemsMap: LinkedHashMap<String, NamedItemDescriptor>? = null
-    private var lastEntryOffset: Long = 0L
     private val lock = ReentrantReadWriteLock()
 
-    override fun listItems(): Either<CoreFileSystemError, List<NamedItemDescriptor>> {
-        when(val r = ensureFolderRead()){
-            is Either.Left -> return r
+    override fun listItems(): Either<CoreFileSystemError, Iterable<NamedItemDescriptor>> {
+        ensureOpened().mapLeft {
+            return it.left()
         }
-        lock.read {
-            val items = ArrayList<NamedItemDescriptor>(itemsMap!!.size)
-            itemsMap!!.values.forEach { items.add(it) }
-            return items.right()
-        }
+
+        lock.readLock().lock()
+        return folderItemsStrategy.listItems(coreFileSystem, inodeAccessor, lock.readLock())
     }
 
     override fun getItem(name: String): Either<CoreFileSystemError, ItemHandler> {
-        when(val r = ensureFolderRead()){
-            is Either.Left -> return r
+        ensureOpened().mapLeft {
+            return it.left()
         }
         lock.read {
-            if(itemsMap!!.containsKey(name)) {
-                val descriptor = itemsMap!![name]!!
-                return coreFileSystem.initializeItemHandler(descriptor)
+            return folderItemsStrategy.getItem(name, coreFileSystem, inodeAccessor, lock.readLock()).flatMap {
+                coreFileSystem.initializeItemHandler(it)
             }
         }
-        return CoreFileSystemError.ItemNotFoundError(name).left()
     }
 
     override fun createItem(item: ItemTemplate): Either<CoreFileSystemError, ItemHandler> {
         if(!checkNameIsValid(item.name))
             return CoreFileSystemError.InvalidItemNameError.left()
-        when(val r = ensureFolderRead()){
-            is Either.Left -> return r
+        ensureOpened().mapLeft {
+            return it.left()
         }
         lock.write {
-            if(itemsMap!!.containsKey(item.name))
-            {
-                return CoreFileSystemError.ItemWithSameNameAlreadyExistsError.left()
-            }
+            folderItemsStrategy.containsItem(item.name, coreFileSystem, inodeAccessor, lock.writeLock())
+                    .fold( {return it.left() } ){
+                        if(it)
+                        {
+                            return CoreFileSystemError.ItemWithSameNameAlreadyExistsError.left()
+                        }
+                    }
             return coreFileSystem.createItem(item.type, item.name).flatMap { h ->
-                itemsMap!![item.name] = h.descriptor
-                val entry = FolderEntry(h.descriptor.nodeId, h.descriptor.type.toNodeType, h.descriptor.name)
-                val ch = inodeAccessor.getSeekableByteChannel(coreFileSystem, lock.writeLock())
-                ch.position(lastEntryOffset)
-                serializeToChannel(ch, entry)
-                lastEntryOffset = ch.position()
-                serializeToChannel(ch, FolderEntry.TerminatingEntry)
+                folderItemsStrategy.addItem(h.descriptor, coreFileSystem, inodeAccessor, lock.writeLock()).mapLeft {
+                    return it.left()
+                }
                 h.right()
             }
         }
     }
 
     override fun deleteItem(name: String): Either<CoreFileSystemError, Unit> {
-        when(val r = ensureFolderRead()){
-            is Either.Left -> return r
+        ensureOpened().mapLeft {
+            return it.left()
         }
         lock.write {
-            if(!itemsMap!!.containsKey(name))
-            {
-                return CoreFileSystemError.ItemNotFoundError(name).left()
-            }
-            val item = itemsMap!![name]!!
-
-            coreFileSystem.initializeItemHandler(item).flatMap {
-                it.delete()
-            }.mapLeft { return it.left() }
-
-            itemsMap!!.remove(name)
-            val ch = inodeAccessor.getSeekableByteChannel(coreFileSystem, lock.writeLock())
-            ch.position(0)
-            itemsMap!!.forEach {
-                serializeToChannel(ch, FolderEntry(it.value.nodeId, it.value.type.toNodeType, it.value.name))
-            }
-            lastEntryOffset = ch.position()
-            serializeToChannel(ch, FolderEntry.TerminatingEntry)
-            ch.truncate(ch.position())
-            return Unit.right()
+            return folderItemsStrategy.getItem(name, coreFileSystem, inodeAccessor, lock.writeLock())
+                .flatMap { item ->
+                    coreFileSystem.initializeItemHandler(item).flatMap {
+                        it.delete()
+                    }.mapLeft { return it.left() }
+                    return folderItemsStrategy.deleteItem(name, coreFileSystem, inodeAccessor, lock.writeLock())
+                }
         }
     }
 
     override fun delete(): Either<CoreFileSystemError, Unit> {
-        if (isClosed.get()){
-            return CoreFileSystemError.ItemClosedError.left()
+        ensureOpened().mapLeft {
+            return it.left()
         }
         if (inodeAccessor.attributeSet.size > FolderEntry.TerminatingEntrySize){
             return CoreFileSystemError.CantDeleteNonEmptyFolderError.left()
@@ -131,35 +97,9 @@ class ActiveFolderHandler(
         isClosed.set(true)
     }
 
-    private fun ensureFolderRead() : Either<CoreFileSystemError, Unit> {
+    private fun ensureOpened() : Either<CoreFileSystemError, Unit> {
         if (isClosed.get()){
             return CoreFileSystemError.ItemClosedError.left()
-        }
-        if (itemsMap != null) {
-            return Unit.right()
-        }
-        initLock.withLock {
-            if(itemsMap != null)
-            {
-                return Unit.right()
-            }
-
-            val map = LinkedHashMap<String, NamedItemDescriptor>()
-            val channel = inodeAccessor.getSeekableByteChannel(coreFileSystem, initLock)
-            do {
-                val entry = deserializeFromChannel<FolderEntry>(channel)
-                if(entry == FolderEntry.TerminatingEntry){
-                    lastEntryOffset = channel.position() - FolderEntry.TerminatingEntrySize
-                    break
-                }
-                map[entry.name] = when(val r = coreFileSystem.getInodeItemDescriptor(entry.inodeId))
-                {
-                    is Either.Right -> NamedItemDescriptor(entry.name, r.b)
-                    is Either.Left -> return r
-                }
-            } while (true)
-
-            itemsMap = map
         }
         return Unit.right()
     }

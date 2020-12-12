@@ -33,6 +33,9 @@ fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemE
             blockGroups,
             DuplexChannelFileSystemSerializer(channel),
             ReferenceCountingConcurrentPool(ItemHandlerProxyFactory()),
+            { cfs, inodeAccessor, descriptor ->
+                ActiveFolderHandler(inodeAccessor, cfs, InMemoryFolderItemsStrategy(), descriptor)
+            },
             SystemTime)
     return coreFs.getOrCreateRootFolder().flatMap { ViFileSystem(it, coreFs).right() }
 }
