@@ -1,79 +1,20 @@
 package com.mvg.virtualfs.core
 
 import arrow.core.Either
-import arrow.core.right
 import com.mvg.virtualfs.massiveRun
 import com.mvg.virtualfs.storage.FolderEntry
-import io.mockk.*
-import io.mockk.impl.annotations.MockK
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-import org.junit.jupiter.api.Test
-
 import org.junit.jupiter.api.Assertions.*
-import org.junit.jupiter.api.BeforeEach
-import java.nio.channels.ReadableByteChannel
-import java.nio.channels.SeekableByteChannel
-import java.nio.channels.WritableByteChannel
+import org.junit.jupiter.api.Test
 import java.util.concurrent.locks.ReentrantLock
 
-internal class InMemoryFolderItemsStrategyTest {
-
-    private val folderEntries = arrayOf(
-            FolderEntry(1, NodeType.File, "file1"),
-            FolderEntry(2, NodeType.Folder, "folder1"),
-            FolderEntry(3, NodeType.File, "file2"),
-            FolderEntry(4, NodeType.Folder, "folder2"))
-    private val descriptorMap = mapOf(
-            1 to ItemDescriptor(1, ItemType.File, mockk()),
-            2 to ItemDescriptor(2, ItemType.Folder, mockk()),
-            3 to ItemDescriptor(3, ItemType.File, mockk()),
-            4 to ItemDescriptor(4, ItemType.Folder, mockk()))
-    private val positionAfterTerminating = 200L
-
-    @MockK
-    private lateinit var serialize: (channel: WritableByteChannel, value: FolderEntry) -> Unit
-    @MockK
-    private lateinit var deserialize: (channel: ReadableByteChannel) -> FolderEntry
-
-    private lateinit var sut: InMemoryFolderItemsStrategy
-    @MockK
-    private lateinit var coreFileSystem: CoreFileSystem
-    @MockK
-    private lateinit var channel: SeekableByteChannel
-    @MockK
-    private lateinit var inodeAccessor: INodeAccessor
-
-
-    @BeforeEach
-    fun setUp(){
-        MockKAnnotations.init(this)
-        sut = InMemoryFolderItemsStrategy(serialize, deserialize)
-        every { coreFileSystem.getInodeItemDescriptor(any()) }.answers {
-            val inodeId = firstArg<Int>()
-            descriptorMap[inodeId]!!.right()
-        }
-        every { channel.position() }.returns(positionAfterTerminating)
-        every { channel.close() }.returns(Unit)
-        var channelState = 0
-        every { deserialize(channel) }.answers {
-            val entry = when {
-                channelState < folderEntries.size -> {
-                    folderEntries[channelState++]
-                }
-                channelState == folderEntries.size -> {
-                    channelState++
-                    FolderEntry.TerminatingEntry
-                }
-                else -> {
-                    fail("Trying to read channel")
-                }
-            }
-            entry
-        }
-        every { inodeAccessor.getSeekableByteChannel(coreFileSystem) }.returns(channel)
-    }
+internal class InMemoryFolderItemsStrategyTest : FolderItemsStrategyTestBase<InMemoryFolderItemsStrategy>() {
 
     @Test
     fun `Test containsItem reads once and returns true for existing entries and false otherwise`() {
@@ -204,11 +145,5 @@ internal class InMemoryFolderItemsStrategyTest {
         expectedListAfterDelete.zip(factList) { e, f -> assertNamedItemDescriptorAreEqual(e, f) }
     }
 
-    private fun assertNamedItemDescriptorAreEqual(expected: NamedItemDescriptor, fact: NamedItemDescriptor)
-    {
-        assertEquals(expected.name, fact.name)
-        assertEquals(expected.nodeId, fact.nodeId)
-        assertEquals(expected.type, fact.type)
-        assertEquals(expected.attributeSet, fact.attributeSet)
-    }
+    override fun buildSut(): InMemoryFolderItemsStrategy = InMemoryFolderItemsStrategy(serialize, deserialize)
 }

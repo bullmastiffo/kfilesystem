@@ -9,10 +9,17 @@ import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.channels.ReadableByteChannel
 import java.nio.channels.SeekableByteChannel
+import java.nio.channels.WritableByteChannel
 import java.util.concurrent.locks.Lock
 
-class AlwaysReadFromChannelFolderItemsStrategy : FolderItemsStrategy {
+class AlwaysReadFromChannelFolderItemsStrategy(
+        private val serialize: (channel: WritableByteChannel, value: FolderEntry) -> Unit
+            = { ch, e -> serializeToChannel(ch, e) },
+        private val deserialize: (channel: ReadableByteChannel) -> FolderEntry
+            = { ch -> deserializeFromChannel(ch) }
+) : FolderItemsStrategy {
     override fun containsItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor)
         : Either<CoreFileSystemError, Boolean> {
         return getItem(name, cfs, accessor).fold(
@@ -28,14 +35,14 @@ class AlwaysReadFromChannelFolderItemsStrategy : FolderItemsStrategy {
     }
 
     override fun listItems(cfs: CoreFileSystem, accessor: INodeAccessor, lock: Lock): Either<CoreFileSystemError, Iterable<NamedItemDescriptor>> {
-        return ItemsReadIterable(cfs, accessor, lock).right()
+        return ItemsReadIterable(cfs, accessor, lock, deserialize).right()
     }
 
     override fun getItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor)
         : Either<CoreFileSystemError, NamedItemDescriptor> {
         accessor.getSeekableByteChannel(cfs).use { channel ->
             do {
-                val entry = deserializeFromChannel<FolderEntry>(channel)
+                val entry = deserialize(channel)
                 if (entry.name == name) {
                     return cfs.getInodeItemDescriptor(entry.inodeId).flatMap {
                         NamedItemDescriptor(entry.name, it).right()
@@ -53,8 +60,8 @@ class AlwaysReadFromChannelFolderItemsStrategy : FolderItemsStrategy {
         val lastEntryOffset = accessor.size - FolderEntry.TerminatingEntrySize
         accessor.getSeekableByteChannel(cfs).use { ch ->
             ch.position(lastEntryOffset)
-            serializeToChannel(ch, entry)
-            serializeToChannel(ch, FolderEntry.TerminatingEntry)
+            serialize(ch, entry)
+            serialize(ch, FolderEntry.TerminatingEntry)
         }
         return descriptor.right()
     }
@@ -65,7 +72,7 @@ class AlwaysReadFromChannelFolderItemsStrategy : FolderItemsStrategy {
             var found = false
             while (!found) {
                 itemToDeleteOffset = channel.position()
-                val entry = deserializeFromChannel<FolderEntry>(channel)
+                val entry = deserialize(channel)
                 if (entry.name == name) {
                     found = true
                 }
@@ -94,12 +101,13 @@ class AlwaysReadFromChannelFolderItemsStrategy : FolderItemsStrategy {
 private class ItemsReadIterable(
         val coreFileSystem: CoreFileSystem,
         private val accessor: INodeAccessor,
-        private val lock: Lock) : Iterable<NamedItemDescriptor> {
+        private val lock: Lock,
+        private val deserialize: (channel: ReadableByteChannel) -> FolderEntry) : Iterable<NamedItemDescriptor> {
     override fun iterator(): Iterator<NamedItemDescriptor> {
         return ItemsIterator(coreFileSystem, accessor.getSeekableByteChannel(coreFileSystem) { lock.unlock() })
     }
 
-    class ItemsIterator (
+    inner class ItemsIterator (
             private val coreFileSystem: CoreFileSystem,
             private val channel: SeekableByteChannel
             ): Iterator<NamedItemDescriptor> {
@@ -125,7 +133,7 @@ private class ItemsReadIterable(
 
         private fun readNextEntry() {
             if (nextEntry == null) {
-                nextEntry = deserializeFromChannel<FolderEntry>(channel)
+                nextEntry = this@ItemsReadIterable.deserialize(channel)
                 closeChannelIfLastEntry()
             }
         }
