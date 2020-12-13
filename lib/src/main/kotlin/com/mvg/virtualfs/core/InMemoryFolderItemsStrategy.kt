@@ -6,6 +6,8 @@ import arrow.core.right
 import com.mvg.virtualfs.storage.FolderEntry
 import com.mvg.virtualfs.storage.serialization.deserializeFromChannel
 import com.mvg.virtualfs.storage.serialization.serializeToChannel
+import java.nio.channels.ReadableByteChannel
+import java.nio.channels.WritableByteChannel
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
@@ -18,7 +20,12 @@ internal val ItemType.toNodeType: NodeType
         }
     }
 
-class InMemoryFolderItemsStrategy : FolderItemsStrategy {
+class InMemoryFolderItemsStrategy(
+        private val serialize: (channel: WritableByteChannel, value: FolderEntry) -> Unit
+            = { ch, e -> serializeToChannel(ch, e) },
+        private val deserialize: (channel: ReadableByteChannel) -> FolderEntry
+            = { ch -> deserializeFromChannel(ch) }
+): FolderItemsStrategy {
     private val initLock = ReentrantLock()
 
     @Volatile
@@ -68,9 +75,9 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
         val entry = FolderEntry(descriptor.nodeId, descriptor.type.toNodeType, descriptor.name)
         accessor.getSeekableByteChannel(cfs).use { ch ->
             ch.position(lastEntryOffset)
-            serializeToChannel(ch, entry)
+            serialize(ch, entry)
             lastEntryOffset = ch.position()
-            serializeToChannel(ch, FolderEntry.TerminatingEntry)
+            serialize(ch, FolderEntry.TerminatingEntry)
         }
         return descriptor.right()
     }
@@ -85,10 +92,10 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
         accessor.getSeekableByteChannel(cfs).use { ch ->
             ch.position(0)
             itemsMap!!.forEach {
-                serializeToChannel(ch, FolderEntry(it.value.nodeId, it.value.type.toNodeType, it.value.name))
+                serialize(ch, FolderEntry(it.value.nodeId, it.value.type.toNodeType, it.value.name))
             }
             lastEntryOffset = ch.position()
-            serializeToChannel(ch, FolderEntry.TerminatingEntry)
+            serialize(ch, FolderEntry.TerminatingEntry)
             ch.truncate(ch.position())
         }
         return Unit.right()
@@ -107,7 +114,7 @@ class InMemoryFolderItemsStrategy : FolderItemsStrategy {
             val map = LinkedHashMap<String, NamedItemDescriptor>()
             inodeAccessor.getSeekableByteChannel(coreFileSystem).use { channel ->
                 do {
-                    val entry = deserializeFromChannel<FolderEntry>(channel)
+                    val entry = deserialize(channel)
                     if (entry == FolderEntry.TerminatingEntry) {
                         lastEntryOffset = channel.position() - FolderEntry.TerminatingEntrySize
                         break
