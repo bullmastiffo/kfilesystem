@@ -3,7 +3,7 @@ package com.mvg.virtualfs.core
 import arrow.core.Either
 
 abstract class FolderHandlerDecoratorBase(private val target: FolderHandler): FolderHandler {
-    override fun listItems(): Either<CoreFileSystemError, List<NamedItemDescriptor>> {
+    override fun listItems(): Either<CoreFileSystemError, Iterable<NamedItemDescriptor>> {
         return target.listItems()
     }
 

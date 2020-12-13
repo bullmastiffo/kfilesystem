@@ -48,7 +48,7 @@ interface FileHandler: ItemHandler{
 }
 
 interface FolderHandler : ItemHandler {
-    fun listItems(): Either<CoreFileSystemError, List<NamedItemDescriptor>>
+    fun listItems(): Either<CoreFileSystemError, Iterable<NamedItemDescriptor>>
     fun getItem(name: String): Either<CoreFileSystemError, ItemHandler>
     fun createItem(item: ItemTemplate): Either<CoreFileSystemError, ItemHandler>
     fun deleteItem(name: String): Either<CoreFileSystemError, Unit>

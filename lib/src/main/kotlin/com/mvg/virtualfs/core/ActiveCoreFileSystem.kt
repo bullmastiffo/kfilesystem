@@ -16,6 +16,8 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
                            private val blockGroups: Array<AllocatingBlockGroup>,
                            private val serializer: FileSystemSerializer,
                            private val handlersPool: ConcurrentPool<Int, ItemHandler>,
+                           private val folderHandlerFactory:
+                            (cfs: CoreFileSystem, accessor: INodeAccessor, descriptor: NamedItemDescriptor) -> FolderHandler,
                            override val time: Time) : CoreFileSystem {
 
     private val blockGroupSize = superGroup.blockSize * superGroup.blockPerGroup
@@ -36,13 +38,13 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
                         initFolder(it)
                     }
                 },
-                { inode, descriptor -> ActiveFolderHandler(inode, this, descriptor) })
+                { inode, descriptor -> folderHandlerFactory(this, inode, descriptor) })
     }
 
     private fun createFolder(name: String) : Either<CoreFileSystemError, FolderHandler>{
         return createItem(name, ItemType.Folder,
                 { initFolder(it) },
-                { inode, descriptor -> ActiveFolderHandler(inode, this, descriptor) })
+                { inode, descriptor -> folderHandlerFactory(this, inode, descriptor) })
     }
 
     private fun createFile(name: String) : Either<CoreFileSystemError, FileHandler>{
@@ -83,14 +85,12 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
     private fun initFolder(inode: INodeAccessor) : Either<CoreFileSystemError, Unit> {
         inode.type = NodeType.Folder
         val terminatingEntry = FolderEntry.TerminatingEntry
-        val l = ReentrantLock()
-        l.lock()
-        val ch = inode.getSeekableByteChannel(this, l)
-        serializeToChannel(ch, terminatingEntry)
-        serializer.runSerializationAction {
-            inode.serialize(it)
+        inode.getSeekableByteChannel(this).use { ch ->
+            serializeToChannel(ch, terminatingEntry)
+            serializer.runSerializationAction {
+                inode.serialize(it)
+            }
         }
-        ch.close()
         return Unit.right()
     }
 
@@ -127,7 +127,7 @@ class ActiveCoreFileSystem(private val superGroup: SuperGroupAccessor,
         return getInodeAccessor(entry.nodeId).flatMap { acc ->
                 handlersPool.getOrPut(entry.nodeId) {
                     when (entry.type) {
-                        ItemType.Folder -> ActiveFolderHandler(acc, this, entry)
+                        ItemType.Folder -> folderHandlerFactory(this, acc, entry)
                         ItemType.File -> ActiveFileHandler(acc, this, entry)
                     }
                 }.right()

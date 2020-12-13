@@ -12,9 +12,13 @@ import java.nio.channels.SeekableByteChannel
 /**
  * Initializes instance of @see ViFileSystem stored in given channel.
  * @param channel SeekableByteChannel
+ * @param strategyFactory Folder items strategy factory
  * @return Either<CoreFileSystemError, ViFileSystem>
  */
-fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemError, ViFileSystem>{
+fun initializeViFilesystem(
+        channel: SeekableByteChannel,
+        strategyFactory: () -> FolderItemsStrategy = { InMemoryFolderItemsStrategy() })
+        : Either<CoreFileSystemError, ViFileSystem>{
     if(channel.position() != 0L){
         channel.position(0L)
     }
@@ -33,6 +37,9 @@ fun initializeViFilesystem(channel: SeekableByteChannel): Either<CoreFileSystemE
             blockGroups,
             DuplexChannelFileSystemSerializer(channel),
             ReferenceCountingConcurrentPool(ItemHandlerProxyFactory()),
+            { cfs, inodeAccessor, descriptor ->
+                ActiveFolderHandler(inodeAccessor, cfs, strategyFactory(), descriptor)
+            },
             SystemTime)
     return coreFs.getOrCreateRootFolder().flatMap { ViFileSystem(it, coreFs).right() }
 }
