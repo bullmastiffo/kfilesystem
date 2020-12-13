@@ -46,11 +46,10 @@ class InMemoryFolderItemsStrategy(
             return it.left()
         }
 
-        lock.withLock {
-            val items = ArrayList<NamedItemDescriptor>(itemsMap!!.size)
-            itemsMap!!.values.forEach { items.add(it) }
-            return items.right()
-        }
+        val items = ArrayList<NamedItemDescriptor>(itemsMap!!.size)
+        itemsMap!!.values.forEach { items.add(it) }
+        lock.unlock()
+        return items.right()
     }
 
     override fun getItem(name: String, cfs: CoreFileSystem, accessor: INodeAccessor)
