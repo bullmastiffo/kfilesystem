@@ -1,6 +1,5 @@
 package com.mvg.virtualfs
 
-import arrow.core.Either
 import com.mvg.virtualfs.core.ActiveINodeAccessor
 import com.mvg.virtualfs.core.AlwaysReadFromChannelFolderItemsStrategy
 import com.mvg.virtualfs.core.InMemoryFolderItemsStrategy
@@ -20,14 +19,14 @@ import java.nio.file.StandardOpenOption
 internal class TestWithAlwaysReadFromChannelFolderItemsStrategy : ViFileSystemEnd2EndTests() {
     private val alwaysReadInstance = AlwaysReadFromChannelFolderItemsStrategy()
     override fun getViFileSystem(ch: SeekableByteChannel) =
-            initializeViFilesystem(ch) { alwaysReadInstance }.fold(
+            initializeViFilesystem(ch, buildSingleStrategyFolderHandlerFactory { alwaysReadInstance }).fold(
                     { throw IOException("Filesystem not created: $it") },
                     { it })
 }
 
 internal class TestWithInMemoryFolderItemsStrategy : ViFileSystemEnd2EndTests() {
     override fun getViFileSystem(ch: SeekableByteChannel) =
-            initializeViFilesystem(ch) { InMemoryFolderItemsStrategy() }.fold(
+            initializeViFilesystem(ch, buildSingleStrategyFolderHandlerFactory { InMemoryFolderItemsStrategy() }).fold(
                     { throw IOException("Filesystem not created: $it") },
                     { it })
 }
